@@ -1,0 +1,15 @@
+# =========================
+# JARVIS FULL-STACK SECRETS
+# =========================
+
+# --- React Environment Variables ---
+.env
+.env.*
+
+# --- C# .NET Core Backend ---
+bin/
+obj/
+appsettings.Development.json
+appsettings.json
+*.user
+TestResults/

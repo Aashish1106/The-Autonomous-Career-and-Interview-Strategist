@@ -1,0 +1,660 @@
+﻿import React, { useState } from 'react';
+import { jsPDF } from "jspdf";
+import GenAILoader from './GenAILoader';
+import AgentConsole from './AgentConsole';
+
+const MatchCard = () => {
+    // --- STATE MANAGEMENT ---
+    const [url, setUrl] = useState('');
+    const [jobText, setJobText] = useState('');
+    const [screenshot, setScreenshot] = useState(null);
+    const [consoleLogs, setConsoleLogs] = useState([]);
+    const [consoleStatus, setConsoleStatus] = useState('idle');
+    const [toastMessage, setToastMessage] = useState(null);
+
+    // NEW: Strategic Override States
+    const [userInstruction, setUserInstruction] = useState('');
+    const [coachFeedback, setCoachFeedback] = useState(null);
+
+    // Loading States
+    const [isFetching, setIsFetching] = useState(false);
+    const [isEvaluating, setIsEvaluating] = useState(false);
+    const [isTailoring, setIsTailoring] = useState(false);
+    const [isGeneratingLetter, setIsGeneratingLetter] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    // Data States
+    const [evaluation, setEvaluation] = useState(null);
+    const [coverLetter, setCoverLetter] = useState(null);
+    const [tailoredSuggestions, setTailoredSuggestions] = useState(null);
+    const [jobId, setJobId] = useState(null); // <--- Tracks the DB record
+    const [lastSavedHash, setLastSavedHash] = useState(null); // <--- Prevents duplicate saving
+
+    // --- HELPER FUNCTIONS ---
+    const showToast = (message) => {
+        setToastMessage(message);
+        setTimeout(() => {
+            setToastMessage(null);
+        }, 3000);
+    };
+
+    const handleSaveToHistory = async () => {
+        if (!evaluation) return;
+
+        // Create a simple hash of the current state to check if we already saved this exact data
+        const currentDataString = JSON.stringify({ evaluation, coverLetter, tailoredSuggestions });
+
+        if (lastSavedHash === currentDataString) {
+            showToast("⚠️ Already Saved: No new changes detected");
+            return;
+        }
+
+        try {
+            const payload = {
+                JobId: jobId,
+                Url: url,
+                JobDescription: jobText,
+                Evaluation: evaluation,
+                CoverLetter: coverLetter,
+                TailoredSuggestions: tailoredSuggestions
+            };
+
+            // Note: We will build this C# endpoint next!
+            const response = await fetch("https://localhost:7155/api/JobStrategist/save-history", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error("Failed to save to history");
+
+            const data = await response.json();
+
+            // If it's the first time saving, the backend will return the new DB row ID
+            if (data.jobId && !jobId) setJobId(data.jobId);
+
+            setLastSavedHash(currentDataString);
+            showToast("💾 Application Snapshot Saved to Vault");
+
+        } catch (error) {
+            console.error(error);
+            showToast("🚨 Error saving to history");
+        }
+    };
+
+    const getStrokeColor = (score) => {
+        if (score >= 80) return 'stroke-emerald-400';
+        if (score >= 60) return 'stroke-yellow-400';
+        return 'stroke-pink-500';
+    };
+
+    // --- HANDLERS ---
+    const handleFetchData = async () => {
+        if (!url) return showToast("Please enter a job URL.");
+
+        setIsFetching(true);
+        setConsoleStatus('processing');
+        setConsoleLogs(["> INITIATING STEALTH BROWSER ENGINE..."]);
+
+        setJobText('');
+        setScreenshot(null);
+        setEvaluation(null);
+        setCoverLetter(null);
+        setTailoredSuggestions(null);
+        setCoachFeedback(null);
+
+        try {
+            setTimeout(() => setConsoleLogs(prev => [...prev, "> BYPASSING WAF & EXTRACTING DOM..."]), 800);
+            setTimeout(() => setConsoleLogs(prev => [...prev, "> AWAITING SCRAPER PAYLOAD . . ."]), 1600);
+
+            const response = await fetch("https://localhost:7155/api/JobStrategist/scrape-url", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(url)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || "Unknown backend error");
+            }
+
+            const data = await response.json();
+
+            setConsoleStatus('idle');
+            setJobText(data.scrapedText);
+            setScreenshot(data.screenshotBase64);
+        } catch (error) {
+            setConsoleStatus('error');
+            setConsoleLogs(prev => [...prev, `[ERROR] Scraper API Failed: ${error.message}`]);
+            console.error(error);
+        } finally {
+            setIsFetching(false);
+        }
+    };
+
+    const handleDownloadPDF = () => {
+        if (!coverLetter) return;
+        const doc = new jsPDF();
+        doc.setFont("times", "normal");
+        doc.setFontSize(11);
+        const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        doc.text(today, 20, 20);
+        const splitText = doc.splitTextToSize(coverLetter, 170);
+        doc.text(splitText, 20, 40);
+        const companyNameClean = evaluation?.companyName ? evaluation.companyName.replace(/[^a-zA-Z0-9]/g, '_') : 'Company';
+        doc.save(`Aashish_CoverLetter_${companyNameClean}.pdf`);
+        showToast("PDF Exported Successfully");
+    };
+
+    const handleEvaluate = async () => {
+        if (!jobText) return showToast("Please fetch or paste job description text first.");
+
+        setIsEvaluating(true);
+        setConsoleStatus('processing');
+        setConsoleLogs(["> SPINNING UP SEMANTIC KERNEL..."]);
+
+        try {
+            setTimeout(() => setConsoleLogs(prev => [...prev, "> TOKENIZING JOB DESCRIPTION & POSTGRESQL PROFILE..."]), 800);
+            setTimeout(() => setConsoleLogs(prev => [...prev, "> AWAITING LLM NEURAL EVALUATION . . ."]), 1600);
+
+            const payload = {
+                jobDescriptionText: jobText, // Whatever variable holds your text
+                jobUrl: url // Whatever variable holds the '[https://careers.spglobal](https://careers.spglobal)...' link
+            };
+
+            const response = await fetch("https://localhost:7155/api/JobStrategist/evaluate-job", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload) // Send the new object
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || "Unknown backend error");
+            }
+
+            const data = await response.json();
+
+            setConsoleStatus('idle');
+            setEvaluation({
+                matchScore: data.evaluation?.match_percentage ?? 0,
+                gaps: data.evaluation?.missing_skills ?? [],
+                action: data.evaluation?.recommended_action ?? "Review Match",
+                companyName: data.job_details?.company ?? "Unknown Company",
+                roleTitle: data.job_details?.role ?? "Unknown Role",
+                workplaceType: data.job_details?.is_remote ? "REMOTE" : "ON-SITE"
+            });
+        } catch (error) {
+            setConsoleStatus('error');
+            setConsoleLogs(prev => [...prev, `[ERROR] Evaluation Failed: ${error.message}`]);
+            console.error(error);
+        } finally {
+            setIsEvaluating(false);
+        }
+    };
+
+    const handleTailorResume = async () => {
+        setIsTailoring(true);
+        setCoachFeedback(null); // Clear previous feedback
+
+        try {
+            const payload = {
+                JobDescription: jobText,
+                UserInstruction: userInstruction
+            };
+
+            const response = await fetch("https://localhost:7155/api/JobStrategist/tailor-resume", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload) // SEND NEW PAYLOAD
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Tailoring API Failed (${response.status}):\n${errorText || "Unknown backend error"}`);
+            }
+
+            const data = await response.json();
+
+            // CHECK THE GATEKEEPER
+            if (data.is_instruction_accepted === false) {
+                setCoachFeedback(data.coach_feedback);
+                return; // Stop execution, don't update resume
+            }
+
+            // If accepted, update as normal
+            if (userInstruction) showToast("Strategic Override Applied");
+            setTailoredSuggestions(data.suggestions);
+
+        } catch (error) {
+            alert(`🚨 ${error.message}`);
+            console.error(error);
+        } finally {
+            setIsTailoring(false);
+        }
+    };
+
+    const handleGenerateLetter = async () => {
+        setIsGeneratingLetter(true);
+        setCoachFeedback(null); // Clear previous feedback
+
+        try {
+            const payload = {
+                JobDescription: jobText,
+                UserInstruction: userInstruction
+            };
+
+            const response = await fetch("https://localhost:7155/api/JobStrategist/generate-cover-letter", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload) // SEND NEW PAYLOAD
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Cover Letter API Failed (${response.status}):\n${errorText || "Unknown backend error"}`);
+            }
+
+            const data = await response.json();
+
+            // CHECK THE GATEKEEPER
+            if (data.is_instruction_accepted === false) {
+                setCoachFeedback(data.coach_feedback);
+                return; // Stop execution, don't output letter
+            }
+
+            // If accepted, update as normal
+            if (userInstruction) showToast("Strategic Override Applied");
+            setCoverLetter(data.cover_letter);
+
+        } catch (error) {
+            alert(`🚨 ${error.message}`);
+            console.error(error);
+        } finally {
+            setIsGeneratingLetter(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        setIsDeleting(true);
+        setTimeout(() => {
+            setJobText('');
+            setEvaluation(null);
+            setCoverLetter(null);
+            setTailoredSuggestions(null);
+            setUrl('');
+            setUserInstruction('');
+            setCoachFeedback(null);
+            setJobId(null); // <--- Clear Job ID
+            setLastSavedHash(null); // <--- Clear Hash
+            setIsDeleting(false);
+        }, 2000);
+    };
+
+    // --- RENDER ---
+    return (
+        <div className="relative group w-full max-w-4xl mx-auto mt-8 mb-8">
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-[24px] blur opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-200 animate-pulse"></div>
+
+            <div className="relative bg-slate-900/90 backdrop-blur-2xl rounded-[22px] p-6 border border-white/10 shadow-2xl overflow-hidden">
+
+                {/* STAGE 1: URL Input & Fetching */}
+                <div className="space-y-4 mb-8">
+                    <div className="flex items-center gap-3 bg-slate-900 border border-slate-700 rounded-xl p-2 px-4 focus-within:border-purple-500 transition-colors">
+                        <span className="text-purple-400">🔗</span>
+                        <input
+                            type="text"
+                            value={url}
+                            onChange={(e) => setUrl(e.target.value)}
+                            placeholder="https://jobs.company.com/..."
+                            className="w-full bg-transparent text-slate-300 outline-none text-sm placeholder-slate-600 font-mono"
+                        />
+                    </div>
+
+                    <div className="relative group/btn mt-4">
+                        <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-600 rounded-xl blur opacity-30 group-hover/btn:opacity-60 transition duration-500"></div>
+                        <button
+                            onClick={handleFetchData}
+                            disabled={isFetching || isEvaluating}
+                            className="relative w-full py-4 bg-slate-900 text-white font-bold uppercase tracking-widest rounded-xl border border-white/10 hover:bg-slate-800 hover:border-purple-500/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] overflow-hidden flex items-center justify-center gap-2"
+                        >
+                            <span className="group-hover/btn:tracking-wider transition-all duration-300">
+                                {isFetching ? "Fetching..." : "Fetch Data 🌐"}
+                            </span>
+                        </button>
+                    </div>
+                </div>
+
+                {/* STAGE 2: Data Display & Loading */}
+                {isFetching || (consoleStatus === 'error' && !jobText && !evaluation) ? (
+                    <div className="py-2 animate-in fade-in duration-500">
+                        <AgentConsole mode="scraping" logs={consoleLogs} status={consoleStatus} />
+
+                        {consoleStatus === 'error' && !isFetching && (
+                            <button
+                                onClick={() => setConsoleStatus('idle')}
+                                className="mt-4 w-full py-4 bg-red-950/20 border border-red-500/30 hover:bg-red-900/40 rounded-xl text-red-400 text-xs font-bold tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(248,113,113,0.1)]"
+                            >
+                                Acknowledge Error & Paste Manually
+                            </button>
+                        )}
+                    </div>
+                ) : isDeleting ? (
+                    <div className="py-8"><GenAILoader message="Purging from Core Memory..." /></div>
+                ) : (
+                    <div className="space-y-4 animate-in fade-in duration-500">
+                        {screenshot && (
+                            <div className="relative group rounded-xl overflow-hidden border border-slate-700 shadow-[0_0_15px_rgba(0,0,0,0.5)] mb-4 animate-in fade-in slide-in-from-top-4 duration-700">
+                                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/20 to-transparent z-10 pointer-events-none"></div>
+                                <img src={`data:image/jpeg;base64,${screenshot}`} alt="Jarvis Target Lock" className="w-full h-48 object-cover object-top opacity-70 group-hover:opacity-100 transition-opacity duration-500" />
+                                <div className="absolute bottom-3 left-4 z-20 flex items-center gap-2">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-[pulse_1s_ease-in-out_infinite] shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
+                                    <span className="text-xs font-mono text-emerald-400 font-bold uppercase tracking-widest drop-shadow-md">Target Acquired // Visual Receipt</span>
+                                </div>
+                            </div>
+                        )}
+                        <textarea
+                            value={jobText}
+                            onChange={(e) => setJobText(e.target.value)}
+                            placeholder="Raw job description text will appear here. If blocked by WAF, paste manually..."
+                            className="w-full h-48 bg-slate-900 border border-slate-700 rounded-xl p-4 text-slate-400 text-sm focus:outline-none focus:border-purple-500 custom-scrollbar font-mono leading-relaxed"
+                        />
+
+                        {!evaluation && (
+                            isEvaluating || (consoleStatus === 'error' && jobText) ? (
+                                <div className="py-2 mt-4 animate-in fade-in duration-500">
+                                    <AgentConsole mode="evaluating" logs={consoleLogs} status={consoleStatus} />
+
+                                    {consoleStatus === 'error' && !isEvaluating && (
+                                        <button
+                                            onClick={() => setConsoleStatus('idle')}
+                                            className="mt-4 w-full py-4 bg-red-950/20 border border-red-500/30 hover:bg-red-900/40 rounded-xl text-red-400 text-xs font-bold tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(248,113,113,0.1)]"
+                                        >
+                                            Dismiss Error & Retry Evaluation
+                                        </button>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="relative group/btn mt-4">
+                                    <div className="absolute -inset-0.5 bg-gradient-to-r from-fuchsia-500 via-purple-500 to-pink-500 rounded-xl blur opacity-30 group-hover/btn:opacity-60 transition duration-500"></div>
+                                    <button
+                                        onClick={handleEvaluate}
+                                        disabled={!jobText}
+                                        className={`relative w-full py-4 bg-slate-900 font-bold uppercase tracking-widest rounded-xl border border-white/10 hover:bg-slate-800 hover:border-pink-500/50 transition-all duration-300 active:scale-[0.98] overflow-hidden flex items-center justify-center gap-2 ${!jobText ? 'text-slate-500 opacity-80 cursor-not-allowed' : 'text-white'}`}
+                                    >
+                                        <span className="group-hover/btn:tracking-wider transition-all duration-300 flex items-center gap-2">Initialize Evaluation ⚡</span>
+                                    </button>
+                                </div>
+                            )
+                        )}
+                    </div>
+                )}
+
+                {/* STAGE 3: Evaluation Results & Action Bar */}
+                {evaluation && !isEvaluating && !isFetching && !isDeleting && (
+                    <div className="mt-10 animate-in fade-in slide-in-from-bottom-4 duration-700 border-t border-slate-800 pt-10">
+                        <div className="flex flex-col items-center justify-center mb-10 text-center">
+                            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-800/50 border border-slate-700 text-xs font-bold text-slate-300 uppercase tracking-widest mb-6 shadow-sm">
+                                <span className="text-blue-400">🏢</span> {evaluation.workplaceType}
+                            </div>
+                            <h2 className="text-5xl font-black text-white tracking-tight mb-3 uppercase drop-shadow-md">{evaluation.companyName}</h2>
+                            <h3 className="text-2xl font-medium text-slate-400">{evaluation.roleTitle}</h3>
+                        </div>
+
+                        <div className="flex flex-col items-center justify-center mb-12">
+                            <div className="relative w-56 h-56 flex items-center justify-center">
+                                <div className={`absolute inset-0 rounded-full blur-2xl opacity-20 ${evaluation.matchScore >= 80 ? 'bg-emerald-500' : evaluation.matchScore >= 60 ? 'bg-yellow-500' : 'bg-pink-500'}`}></div>
+                                <svg className="w-full h-full transform -rotate-90 relative z-10">
+                                    <circle cx="112" cy="112" r="100" className="stroke-slate-800/80 fill-none" strokeWidth="14" />
+                                    <circle
+                                        cx="112" cy="112" r="100"
+                                        className={`${getStrokeColor(evaluation.matchScore)} fill-none transition-all duration-1500 ease-out`}
+                                        strokeWidth="14" strokeDasharray="628" strokeDashoffset={628 - (628 * evaluation.matchScore) / 100} strokeLinecap="round"
+                                    />
+                                </svg>
+                                <div className="absolute flex flex-col items-center justify-center text-center z-20">
+                                    <span className={`text-6xl font-black tracking-tighter ${evaluation.matchScore >= 80 ? 'text-emerald-400' : evaluation.matchScore >= 60 ? 'text-yellow-400' : 'text-pink-500'}`}>
+                                        {evaluation.matchScore}<span className="text-4xl">%</span>
+                                    </span>
+                                    <span className="text-xs text-slate-500 uppercase tracking-widest font-bold mt-2">Semantic Match</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {evaluation.gaps && evaluation.gaps.length > 0 && (
+                            <div className="mb-12">
+                                <h4 className="text-center text-xs font-bold text-slate-500 uppercase tracking-widest mb-5">Identified Gaps</h4>
+                                <div className="flex flex-wrap justify-center gap-3">
+                                    {evaluation.gaps.map((gap, index) => (
+                                        <span key={index} className="bg-pink-950/40 border border-pink-500/30 text-pink-300 text-sm font-medium px-5 py-2.5 rounded-xl shadow-sm">{gap}</span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* THE JARVIS VERDICT BANNER */}
+                        <div className="mb-8">
+                            <div className={`w-full py-5 rounded-xl flex flex-col items-center justify-center gap-2 border border-dashed relative overflow-hidden ${evaluation.matchScore >= 80 ? 'bg-emerald-950/20 text-emerald-400 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.05)]' :
+                                    evaluation.matchScore >= 60 ? 'bg-yellow-950/20 text-yellow-400 border-yellow-500/50' :
+                                        'bg-pink-950/20 text-pink-500 border-pink-500/50 shadow-[0_0_20px_rgba(236,72,153,0.05)]'
+                                }`}>
+                                <span className="text-[10px] font-black opacity-70 tracking-[0.3em] uppercase">Jarvis Final Verdict</span>
+
+                                <span className="text-lg font-black uppercase tracking-widest drop-shadow-md">
+                                    {evaluation.matchScore >= 80 ? '🟢 High Match: Proceed to Apply' :
+                                        evaluation.matchScore >= 60 ? '🟡 Moderate Match: Tailor Heavily' :
+                                            '🔴 Low Match: Pass on this Role'}
+                                </span>
+
+                                <span className="text-xs font-serif text-slate-400 mt-1 max-w-lg text-center leading-relaxed">
+                                    "{evaluation.action}"
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* --- GATEKEEPER UI INTERVENTION --- */}
+
+                        {/* 1. The Coach Feedback Banner (Only visible if instruction rejected) */}
+                        {coachFeedback && (
+                            <div className="mb-4 p-5 rounded-xl bg-amber-950/20 border border-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.05)] animate-in slide-in-from-top-4 fade-in duration-500 flex items-start gap-4">
+                                <span className="text-amber-400 text-2xl mt-1 animate-pulse">💡</span>
+                                <div>
+                                    <h4 className="text-amber-400 font-bold text-[11px] uppercase tracking-widest mb-1.5 flex items-center gap-2">
+                                        Jarvis Strategic Override
+                                        <span className="bg-amber-500/20 text-amber-300 text-[9px] px-2 py-0.5 rounded-full border border-amber-500/30">Action Paused</span>
+                                    </h4>
+                                    <p className="text-amber-200/80 text-sm font-serif leading-relaxed">{coachFeedback}</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 2. The Optional Custom Instruction Input */}
+                        <div className="mb-5">
+                            <div className="flex items-center gap-3 bg-slate-900 border border-slate-700 hover:border-blue-500/50 rounded-xl p-3 px-5 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/50 transition-all shadow-inner">
+                                <span className="text-blue-400/70 text-sm">🎯</span>
+                                <input
+                                    type="text"
+                                    value={userInstruction}
+                                    onChange={(e) => {
+                                        setUserInstruction(e.target.value);
+                                        if (coachFeedback) setCoachFeedback(null); // Clear warning as they type a fix
+                                    }}
+                                    placeholder="Optional: Provide custom instructions for Jarvis (e.g., 'Focus heavily on my .NET architecture skills')..."
+                                    className="w-full bg-transparent text-slate-300 outline-none text-sm placeholder-slate-600 font-mono"
+                                />
+                            </div>
+                        </div>
+
+                        {/* --- ACTION BUTTONS --- */}
+                        <div className="flex flex-col md:flex-row gap-4 w-full">
+
+                            {/* Clear Data Button */}
+                            <div className="relative group/btn flex-1">
+                                <div className="absolute -inset-0.5 bg-gradient-to-r from-slate-700 to-slate-600 rounded-xl blur opacity-20 group-hover/btn:opacity-50 transition duration-500"></div>
+                                <button onClick={handleDelete} className="relative w-full py-4 bg-slate-900 text-slate-400 font-bold uppercase tracking-widest rounded-xl border border-slate-700 hover:border-slate-500 hover:text-slate-200 transition-all duration-300 active:scale-[0.98] flex items-center justify-center">
+                                    <span className="group-hover/btn:tracking-wider transition-all duration-300">
+                                        Clear Screen
+                                    </span>
+                                </button>
+                            </div>
+
+                            {/* ---> NEW: Save to History Button <--- */}
+                            <div className="relative group/btn flex-1">
+                                <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 to-cyan-500 rounded-xl blur opacity-30 group-hover/btn:opacity-70 transition duration-500"></div>
+                                <button onClick={handleSaveToHistory} className="relative w-full py-4 bg-slate-900 text-blue-300 font-bold uppercase tracking-widest rounded-xl border border-blue-500/30 hover:border-blue-400 hover:bg-blue-950/30 transition-all duration-300 active:scale-[0.98] flex items-center justify-center">
+                                    <span className="group-hover/btn:tracking-wider transition-all duration-300 flex items-center gap-2">
+                                        <span>💾</span> Save Snapshot
+                                    </span>
+                                </button>
+                            </div>
+
+                            {/* Auto-Tailor Button */}
+                            {isTailoring ? (
+                                <div className="flex-1"><GenAILoader message="Optimizing Keywords..." /></div>
+                            ) : (
+                                <div className="relative group/btn flex-1">
+                                    <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl blur opacity-30 group-hover/btn:opacity-70 transition duration-500"></div>
+                                    <button onClick={handleTailorResume} className="relative w-full py-4 bg-slate-900 text-purple-300 font-bold uppercase tracking-widest rounded-xl border border-purple-500/30 hover:border-purple-400 hover:bg-purple-950/30 transition-all duration-300 active:scale-[0.98] flex items-center justify-center">
+                                        <span className="group-hover/btn:tracking-wider transition-all duration-300 flex items-center gap-2">
+                                            <span>✨</span> Auto-Tailor
+                                        </span>
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Generate Letter Button */}
+                            {isGeneratingLetter ? (
+                                <div className="flex-1"><GenAILoader message="Drafting Cover Letter..." /></div>
+                            ) : (
+                                <div className="relative group/btn flex-1">
+                                    <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-600 to-teal-500 rounded-xl blur opacity-30 group-hover/btn:opacity-70 transition duration-500"></div>
+                                    <button onClick={handleGenerateLetter} className="relative w-full py-4 bg-slate-900 text-emerald-300 font-bold uppercase tracking-widest rounded-xl border border-emerald-500/30 hover:border-emerald-400 hover:bg-emerald-950/30 transition-all duration-300 active:scale-[0.98] flex items-center justify-center">
+                                        <span className="group-hover/btn:tracking-wider transition-all duration-300 flex items-center gap-2">
+                                            <span>📝</span> Generate Letter
+                                        </span>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {tailoredSuggestions && Array.isArray(tailoredSuggestions) && (
+                            <div className="relative z-10 mt-10 animate-in fade-in slide-in-from-top-4 duration-700">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h4 className="text-lg font-black text-white flex items-center gap-3 tracking-wide uppercase drop-shadow-md">
+                                        <span className="bg-purple-500/20 p-2 rounded-xl text-purple-400 border border-purple-500/30">✨</span> AI Editorial Strategy
+                                    </h4>
+                                </div>
+                                <div className="space-y-8">
+                                    {tailoredSuggestions.map((suggestion, index) => (
+                                        <div key={index} className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/60 p-6 rounded-2xl shadow-xl relative overflow-hidden group">
+                                            <div className="mb-6">
+                                                <span className="text-[10px] font-black tracking-widest text-slate-500 uppercase flex items-center gap-2 mb-2">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-pink-500/70"></span> Original Profile
+                                                </span>
+                                                <div className="p-4 rounded-xl bg-slate-950/50 border border-slate-800/50 text-slate-400 text-sm leading-relaxed line-through decoration-pink-500/30 font-serif">
+                                                    {suggestion.original_bullet}
+                                                </div>
+                                            </div>
+                                            <div className="space-y-4">
+                                                <span className="text-[10px] font-black tracking-widest text-blue-400 uppercase flex items-center gap-2">
+                                                    <span>🔄</span> Generated Options
+                                                </span>
+                                                {suggestion.variations && suggestion.variations.map((variation, vIndex) => {
+                                                    const isBest = vIndex === suggestion.best_variation_index;
+                                                    return (
+                                                        <div key={vIndex} className={`p-4 rounded-xl border relative transition-all duration-300 group/copy ${isBest ? 'bg-emerald-950/20 border-emerald-500/50 shadow-[inset_0_0_15px_rgba(16,185,129,0.05)]' : 'bg-slate-800/30 border-slate-700/50 hover:bg-slate-800/50'}`}>
+
+                                                            {isBest && (
+                                                                <div className="absolute -top-3 -right-2 bg-emerald-500 text-slate-950 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-[0_0_10px_rgba(16,185,129,0.5)] z-10">Jarvis Top Pick ⭐</div>
+                                                            )}
+
+                                                            <div className="flex justify-between items-start mb-2">
+                                                                <div className={`text-[10px] font-bold uppercase tracking-wider ${isBest ? 'text-emerald-400' : 'text-slate-500'}`}>
+                                                                    Focus: {variation.focus}
+                                                                </div>
+
+                                                                <button
+                                                                    onClick={() => {
+                                                                        navigator.clipboard.writeText(variation.text);
+                                                                        showToast(`Copied: ${variation.focus} Variation`);
+                                                                    }}
+                                                                    className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border transition-all duration-200 opacity-0 group-hover/copy:opacity-100 ${isBest
+                                                                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                                                                        : 'bg-slate-700/50 text-slate-400 border-slate-600 hover:bg-slate-700 hover:text-slate-200'
+                                                                        }`}
+                                                                    title="Copy this bullet to clipboard"
+                                                                >
+                                                                    Copy
+                                                                </button>
+                                                            </div>
+
+                                                            <div className={`text-sm leading-relaxed font-serif ${isBest ? 'text-emerald-100' : 'text-slate-300'}`}>
+                                                                {variation.text}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                            <div className="mt-6 pt-5 border-t border-slate-800/60">
+                                                <span className="text-[10px] font-black tracking-widest text-purple-400 uppercase mb-2 flex items-center gap-2">
+                                                    <span>🧠</span> Why Jarvis chose Option {suggestion.best_variation_index + 1}
+                                                </span>
+                                                <p className="text-slate-300 text-sm leading-relaxed italic border-l-2 border-purple-500/50 pl-4">{suggestion.jarvis_reasoning}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {coverLetter && (
+                            <div className="relative z-10 mt-8 pt-6 border-t border-slate-800/50 animate-in fade-in slide-in-from-top-4 duration-700">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                                        <span className="bg-emerald-500/20 p-1.5 rounded-lg text-emerald-400">📝</span> Tailored Cover Letter
+                                    </h4>
+
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={handleDownloadPDF}
+                                            className="text-xs font-bold text-blue-400 hover:text-blue-300 uppercase tracking-widest bg-blue-500/10 px-3 py-1.5 rounded-lg border border-blue-500/20 hover:bg-blue-500/20 transition-colors flex items-center gap-2"
+                                            title="Download as PDF"
+                                        >
+                                            <span>📄</span> Export PDF
+                                        </button>
+
+                                        <button
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(coverLetter);
+                                                showToast("Cover Letter Copied to Clipboard");
+                                            }}
+                                            className="text-xs font-bold text-emerald-400 hover:text-emerald-300 uppercase tracking-widest bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
+                                        >
+                                            Copy Text
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="bg-slate-950/80 border border-slate-800 p-6 rounded-2xl whitespace-pre-wrap text-slate-300 text-sm leading-relaxed font-serif shadow-inner">{coverLetter}</div>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* ---> JARVIS TOAST NOTIFICATION HUD <--- */}
+            {toastMessage && (
+                <div className="fixed bottom-8 right-8 z-[100] animate-in slide-in-from-bottom-8 fade-in duration-300">
+                    <div className="bg-slate-900/90 backdrop-blur-xl border border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.2)] text-emerald-400 px-6 py-4 rounded-xl font-mono text-xs font-bold uppercase tracking-widest flex items-center gap-4">
+                        <div className="relative flex h-2.5 w-2.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
+                        </div>
+                        {toastMessage}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default MatchCard;

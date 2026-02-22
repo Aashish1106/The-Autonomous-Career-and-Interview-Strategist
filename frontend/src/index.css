@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+/* ---> JARVIS DELETION ANIMATION <--- */
+@keyframes cyber-shatter {
+    0% {
+        transform: scale(1) rotate(0deg);
+        opacity: 1;
+        filter: blur(0);
+        clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+    }
+
+    20% {
+        transform: scale(1.02) rotate(-1deg);
+        opacity: 0.9;
+        filter: blur(2px);
+        clip-path: polygon(0 10%, 100% 0, 90% 100%, 10% 90%);
+    }
+
+    40% {
+        transform: scale(1.05) rotate(2deg);
+        opacity: 0.7;
+        filter: blur(4px);
+        clip-path: polygon(10% 0, 90% 10%, 100% 90%, 0 100%);
+    }
+
+    60% {
+        transform: scaleX(1.2) scaleY(0.5) rotate(-3deg);
+        opacity: 0.4;
+        filter: blur(8px);
+        clip-path: polygon(20% 20%, 80% 10%, 90% 80%, 10% 90%);
+    }
+
+    100% {
+        transform: scaleX(2) scaleY(0) rotate(5deg);
+        opacity: 0;
+        filter: blur(12px);
+        clip-path: polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%);
+    }
+}
+
+.animate-cyber-shatter {
+    animation: cyber-shatter 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
