@@ -14,6 +14,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization; // <-- This lets us force exact JSON names
 using System.Text.RegularExpressions;
 using UglyToad.PdfPig;
+using System;
+using System.Linq;
 
 namespace AutoJobStrategist.Api.Controllers
 {
@@ -290,11 +292,17 @@ namespace AutoJobStrategist.Api.Controllers
             }
             catch (Exception ex)
             {
+                // ---> UNIVERSAL TOKEN EXHAUSTION DETECTOR <---
+                if (ex.Message.Contains("429") || ex.Message.Contains("Too Many Requests") || ex.Message.Contains("quota"))
+                {
+                    return StatusCode(429, "API_EXHAUSTED: Jarvis token reserves are depleted for the day. Please try again tomorrow.");
+                }
+
                 return StatusCode(500, $"Agent failure: {ex.Message}");
             }
         }
 
-        
+
         [HttpGet("top-matches")]
         public async Task<IActionResult> GetTopSemanticMatches()
         {
@@ -304,7 +312,8 @@ namespace AutoJobStrategist.Api.Controllers
             if (userProfile?.ResumeEmbedding == null)
                 return BadRequest("No resume embedding found. Please evaluate a job first!");
 
-            var topJobs = await _context.JobApplications
+            // 1. Fetch raw data and assign it to 'topJobsRaw'
+            var topJobsRaw = await _context.JobApplications
                 .Where(j => j.JobEmbedding != null)
                 .OrderBy(j => j.JobEmbedding!.CosineDistance(userProfile.ResumeEmbedding))
                 .Select(j => new
@@ -313,11 +322,39 @@ namespace AutoJobStrategist.Api.Controllers
                     j.CompanyName,
                     j.RoleTitle,
                     j.Status,
-                    VectorMatchScore = Math.Round((1 - j.JobEmbedding!.CosineDistance(userProfile.ResumeEmbedding)) * 100, 1),
-                    LlmMatchScore = j.MatchScore
+                    j.MatchScore,
+                    // WE MUST SELECT THE RAW DISTANCE HERE FOR STEP 2 TO USE IT
+                    CosineDistance = j.JobEmbedding!.CosineDistance(userProfile.ResumeEmbedding)
                 })
-                .Take(5)
+                .Take(200) // Grab the top 20 so you can see the bad ones at the bottom
                 .ToListAsync();
+
+            // 2. Apply the Aggressive Amplification Curve and assign to 'topJobs'
+            var topJobs = topJobsRaw.Select(j =>
+            {
+                double rawSimilarity = 1 - j.CosineDistance;
+
+                // The True Gemini Floor: Bad matches sit around 0.50
+                double minBounds = 0.50;
+
+                // The True Gemini Ceiling: Great matches sit around 0.75
+                double maxBounds = 0.75;
+
+                double amplifiedScore = ((rawSimilarity - minBounds) / (maxBounds - minBounds)) * 100;
+
+                // Clamp the values so they never go below 0 or above 99.9
+                double finalScore = Math.Max(0, Math.Min(99.9, amplifiedScore));
+
+                return new
+                {
+                    j.Id,
+                    j.CompanyName,
+                    j.RoleTitle,
+                    j.Status,
+                    LlmMatchScore = j.MatchScore,
+                    VectorMatchScore = Math.Round(finalScore, 1) // Round to 1 decimal place (e.g., 94.2)
+                };
+            }).ToList();
 
             return Ok(topJobs);
         }
@@ -404,8 +441,15 @@ namespace AutoJobStrategist.Api.Controllers
             }
             catch (Exception ex)
             {
+                // ---> UNIVERSAL TOKEN EXHAUSTION DETECTOR <---
+                if (ex.Message.Contains("429") || ex.Message.Contains("Too Many Requests") || ex.Message.Contains("quota"))
+                {
+                    return StatusCode(429, "API_EXHAUSTED: Jarvis token reserves are depleted for the day. Please try again tomorrow.");
+                }
+
                 return StatusCode(500, $"Agent failure: {ex.Message}");
             }
+        
         }
 
         [HttpPost("generate-cover-letter")]
@@ -483,8 +527,15 @@ namespace AutoJobStrategist.Api.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"Cover Letter Gen Failed: {ex.Message}");
+                // ---> UNIVERSAL TOKEN EXHAUSTION DETECTOR <---
+                if (ex.Message.Contains("429") || ex.Message.Contains("Too Many Requests") || ex.Message.Contains("quota"))
+                {
+                    return StatusCode(429, "API_EXHAUSTED: Jarvis token reserves are depleted for the day. Please try again tomorrow.");
+                }
+
+                return StatusCode(500, $"Agent failure: {ex.Message}");
             }
+        
         }
 
 
@@ -546,6 +597,10 @@ namespace AutoJobStrategist.Api.Controllers
                 if (request.TailoredSuggestions.HasValue && request.TailoredSuggestions.Value.ValueKind != System.Text.Json.JsonValueKind.Null)
                     record.TailoredResumeJson = request.TailoredSuggestions.Value.ToString();
 
+                // ---> Save the Interview Session to PostgreSQL <---
+                if (request.InterviewHistory.HasValue && request.InterviewHistory.Value.ValueKind != System.Text.Json.JsonValueKind.Null)
+                    record.InterviewHistoryJson = request.InterviewHistory.Value.ToString();
+                
                 await _context.SaveChangesAsync();
 
                 return Ok(new { message = "Successfully saved to Vault.", jobId = record.Id });
@@ -714,7 +769,7 @@ namespace AutoJobStrategist.Api.Controllers
         Job Description: {{$jobText}}
         Candidate Resume: {{$resumeText}}
 
-        TASK: Generate 3 highly specific, challenging interview questions. 
+        TASK: Generate 10 highly specific, challenging interview questions. 
         - DO NOT ask generic behavioral questions (e.g., 'What is your weakness?').
         - DO ask scenario-based technical questions.
         - Probe the intersection of their skills and the job. If the job requires a skill they lack, ask how they would adapt.
@@ -756,6 +811,16 @@ namespace AutoJobStrategist.Api.Controllers
             }
             catch (Exception ex)
             {
+                // ---> Detect Semantic Kernel / API token exhaustion <---
+                if (ex.Message.Contains("429") || ex.Message.Contains("Too Many Requests") || ex.Message.Contains("quota"))
+                {
+                    return StatusCode(429, new
+                    {
+                        error = "RATE_LIMIT_EXHAUSTED",
+                        message = "Local AI tokens depleted. Ready for Gemini Handoff Protocol."
+                    });
+                }
+
                 return StatusCode(500, $"Interview Generation Failed: {ex.Message}");
             }
         }
@@ -822,6 +887,33 @@ namespace AutoJobStrategist.Api.Controllers
             {
                 return StatusCode(500, $"Evaluation Failed: {ex.Message}");
             }
+        }
+
+
+        [HttpPatch("history/{id}/upgrade")]
+        public async Task<IActionResult> UpgradeHistoryRecord(Guid id, [FromBody] UpgradeHistoryRequest request)
+        {
+            var record = await _context.EvaluationHistories.FindAsync(id);
+            if (record == null)
+                return NotFound("Vault record not found.");
+
+            // Dynamically patch only the fields that were sent in the request
+            if (!string.IsNullOrWhiteSpace(request.JobDescription))
+                record.JobDescription = request.JobDescription;
+
+            if (!string.IsNullOrWhiteSpace(request.JobUrl))
+                record.JobUrl = request.JobUrl;
+
+            if (!string.IsNullOrWhiteSpace(request.CompanyName))
+                record.CompanyName = request.CompanyName;
+
+            if (!string.IsNullOrWhiteSpace(request.RoleTitle))
+                record.RoleTitle = request.RoleTitle;
+
+            record.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return Ok(record);
         }
 
     }
@@ -903,6 +995,9 @@ namespace AutoJobStrategist.Api.Controllers
         public string? TailoredResumeJson { get; set; }
         public string? CoverLetterText { get; set; }
 
+        // ---> Persistent memory for the mock interviews <---
+        public string? InterviewHistoryJson { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }
@@ -916,6 +1011,9 @@ namespace AutoJobStrategist.Api.Controllers
         public System.Text.Json.JsonElement? Evaluation { get; set; }
         public string? CoverLetter { get; set; }
         public System.Text.Json.JsonElement? TailoredSuggestions { get; set; }
+        
+        // ---> Catch the interview payload from React <---
+        public System.Text.Json.JsonElement? InterviewHistory { get; set; }
     }
 
     public class UpdateProfileRequest
@@ -982,6 +1080,17 @@ namespace AutoJobStrategist.Api.Controllers
 
         [JsonPropertyName("search_query")]
         public string SearchQuery { get; set; } = string.Empty; // e.g., "Azure DevOps CI/CD pipeline tutorial"
+    
+    }
+
+    // This class acts as the universal patch receiver. 
+    // Anytime we add a new string column to the DB in the future, just add it here!
+    public class UpgradeHistoryRequest
+    {
+        public string? JobDescription { get; set; }
+        public string? JobUrl { get; set; }
+        public string? CompanyName { get; set; }
+        public string? RoleTitle { get; set; }
     }
 
 } 

@@ -8,11 +8,26 @@ const EvaluationHistory = () => {
     const [selectedJob, setSelectedJob] = useState(null);
     const [toastMessage, setToastMessage] = useState(null);
     const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
+    const [upgradeData, setUpgradeData] = useState({});
+    const [isUpgrading, setIsUpgrading] = useState(false);
 
     // State for the advanced shatter animation
     const [deletingId, setDeletingId] = useState(null);
 
     // --- HELPER FUNCTIONS ---
+
+    // This is our single source of truth for what a "Modern" record looks like.
+    // If we add new features later (e.g., 'salaryRange'), just add it to this array.
+    const EXPECTED_SCHEMA = [
+        { key: 'jobDescription', label: 'Job Description', type: 'textarea', description: 'Required for technical interviews.' },
+        { key: 'jobUrl', label: 'Original Job URL', type: 'text', description: 'Link to the original posting.' },
+        { key: 'companyName', label: 'Company Name', type: 'text', description: 'The hiring company.' },
+        { key: 'roleTitle', label: 'Role Title', type: 'text', description: 'The official job title.' }
+    ];
+
+    // Calculate which fields are missing from the currently selected job
+    const missingFields = selectedJob ? EXPECTED_SCHEMA.filter(field => !selectedJob[field.key] || selectedJob[field.key].trim() === '') : [];
+
     const showToast = (message) => {
         setToastMessage(message);
         setTimeout(() => setToastMessage(null), 3000);
@@ -74,6 +89,45 @@ const EvaluationHistory = () => {
             console.error(error);
             setDeletingId(null); // Revert animation if API fails
             showToast("🚨 Error deleting record");
+        }
+    };
+
+    const handleUpgradeRecord = async () => {
+        // Ensure all dynamically requested fields have been filled out
+        const hasEmptyFields = missingFields.some(field => !upgradeData[field.key] || upgradeData[field.key].trim() === '');
+        if (hasEmptyFields) {
+            showToast("🚨 Please fill out all required missing fields.");
+            return;
+        }
+
+        setIsUpgrading(true);
+        try {
+            // Capitalize the first letter of keys to match C# properties (e.g., jobDescription -> JobDescription)
+            const payload = {};
+            for (const [key, value] of Object.entries(upgradeData)) {
+                const csharpKey = key.charAt(0).toUpperCase() + key.slice(1);
+                payload[csharpKey] = value;
+            }
+
+            const response = await fetch(`https://localhost:7155/api/JobStrategist/history/${selectedJob.id}/upgrade`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error("Failed to upgrade record");
+
+            // Instantly patch the local state so the UI updates
+            setSelectedJob(prev => ({ ...prev, ...upgradeData }));
+            setUpgradeData({});
+            showToast("✅ Vault Record Synchronized to Modern Schema");
+
+            window.dispatchEvent(new Event('vaultUpdated'));
+        } catch (error) {
+            console.error(error);
+            showToast("🚨 Error upgrading record");
+        } finally {
+            setIsUpgrading(false);
         }
     };
 
@@ -242,14 +296,69 @@ const EvaluationHistory = () => {
                                     </a>
                                 )}
 
+                                {/* Disable the button if it's a legacy record missing the description */}
                                 <button
                                     onClick={() => setIsSimulatorOpen(true)}
-                                    className="inline-flex items-center gap-2 bg-purple-600/20 hover:bg-purple-500/30 text-purple-400 border border-purple-500/40 px-5 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(168,85,247,0.1)] hover:shadow-[0_0_20px_rgba(168,85,247,0.3)] hover:-translate-y-0.5"
+                                    // ---> FIX: Lock the button if ANY schema fields are missing <---
+                                    disabled={missingFields.length > 0}
+                                    className="inline-flex items-center gap-2 bg-purple-600/20 hover:bg-purple-500/30 text-purple-400 border border-purple-500/40 px-5 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(168,85,247,0.1)] hover:shadow-[0_0_20px_rgba(168,85,247,0.3)] hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                                    title={missingFields.length > 0 ? "Synchronize legacy record to unlock" : "Start Mock Interview"}
                                 >
                                     <span>🎯</span> Commence Mock Interview
                                 </button>
                             </div>
                         </div>
+
+                        {/* ---> NEW: DYNAMIC SCHEMA UPGRADE PANEL <--- */}
+                        {missingFields.length > 0 && (
+                            <div className="mt-8 mb-12 bg-amber-950/20 border border-amber-500/50 rounded-2xl p-6 shadow-inner relative overflow-hidden animate-in fade-in zoom-in-95 duration-500">
+                                <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-500"></div>
+                                <h4 className="text-amber-400 font-black uppercase tracking-widest text-sm mb-2 flex items-center gap-2">
+                                    <span>⚠️</span> Legacy Schema Detected
+                                </h4>
+                                <p className="text-slate-300 text-sm font-serif mb-6">
+                                    This archive is missing {missingFields.length} data point{missingFields.length > 1 ? 's' : ''} required by the modern Jarvis architecture. Please backfill the missing information below to unlock all features.
+                                </p>
+
+                                <div className="space-y-4 mb-6">
+                                    {missingFields.map(field => (
+                                        <div key={field.key} className="flex flex-col gap-1">
+                                            <label className="text-xs font-black text-amber-500/80 uppercase tracking-widest flex justify-between">
+                                                {field.label}
+                                                <span className="text-slate-500 text-[9px]">{field.description}</span>
+                                            </label>
+                                            {field.type === 'textarea' ? (
+                                                <textarea
+                                                    value={upgradeData[field.key] || ''}
+                                                    onChange={(e) => setUpgradeData(prev => ({ ...prev, [field.key]: e.target.value }))}
+                                                    placeholder={`Enter ${field.label}...`}
+                                                    className="w-full h-32 bg-slate-950/50 border border-slate-700 focus:border-amber-500/50 rounded-xl p-4 text-slate-300 text-sm font-serif outline-none resize-none custom-scrollbar"
+                                                />
+                                            ) : (
+                                                <input
+                                                    type="text"
+                                                    value={upgradeData[field.key] || ''}
+                                                    onChange={(e) => setUpgradeData(prev => ({ ...prev, [field.key]: e.target.value }))}
+                                                    placeholder={`Enter ${field.label}...`}
+                                                    className="w-full bg-slate-950/50 border border-slate-700 focus:border-amber-500/50 rounded-xl px-4 py-3 text-slate-300 text-sm font-serif outline-none"
+                                                />
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="flex justify-end">
+                                    <button
+                                        onClick={handleUpgradeRecord}
+                                        disabled={isUpgrading}
+                                        className="bg-amber-600 hover:bg-amber-500 text-white px-8 py-3 rounded-xl font-bold uppercase tracking-widest text-xs transition-all disabled:opacity-50 flex items-center gap-2"
+                                    >
+                                        {isUpgrading ? "Synchronizing Data..." : "💾 Synchronize Record"}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                        {/* ----------------------------------------------- */}
 
                         <div className="relative w-40 h-40 flex items-center justify-center shrink-0">
                             <div className={`absolute inset-0 rounded-full blur-2xl opacity-20 ${selectedJob.matchScore >= 80 ? 'bg-emerald-500' : selectedJob.matchScore >= 60 ? 'bg-yellow-500' : 'bg-pink-500'}`}></div>
@@ -382,7 +491,7 @@ const EvaluationHistory = () => {
 
             {isSimulatorOpen && selectedJob && (
                 <InterviewSimulator
-                    jobDescription={selectedJob.jobDescription}
+                    job={selectedJob} // <--- Pass the whole job object, not just the description
                     onClose={() => setIsSimulatorOpen(false)}
                 />
             )}

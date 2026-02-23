@@ -98,6 +98,10 @@ const MatchCard = () => {
 
             if (!response.ok) {
                 const errorText = await response.text();
+                // ---> UNIVERSAL 429 HANDLER <---
+                if (response.status === 429) {
+                    throw new Error("⚠️ Jarvis Core: AI Token quota exhausted. Please rest and resume tomorrow.");
+                }
                 throw new Error(errorText || "Unknown backend error");
             }
             const data = await response.json();
@@ -180,6 +184,10 @@ const MatchCard = () => {
 
             if (!response.ok) {
                 const errorText = await response.text();
+                // ---> UNIVERSAL 429 HANDLER <---
+                if (response.status === 429) {
+                    throw new Error("⚠️ Jarvis Core: AI Token quota exhausted. Please rest and resume tomorrow.");
+                }
                 throw new Error(`Tailoring API Failed (${response.status}):\n${errorText || "Unknown backend error"}`);
             }
             const data = await response.json();
@@ -219,6 +227,10 @@ const MatchCard = () => {
 
             if (!response.ok) {
                 const errorText = await response.text();
+                // ---> UNIVERSAL 429 HANDLER <---
+                if (response.status === 429) {
+                    throw new Error("⚠️ Jarvis Core: AI Token quota exhausted. Please rest and resume tomorrow.");
+                }
                 throw new Error(`Cover Letter API Failed (${response.status}):\n${errorText || "Unknown backend error"}`);
             }
             const data = await response.json();

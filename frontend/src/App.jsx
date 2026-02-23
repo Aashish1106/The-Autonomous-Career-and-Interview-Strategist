@@ -140,65 +140,70 @@ function App() {
                         {/* TAB 2: Vector Search */}
                         {activeTab === 'search' && (
                             <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-                                    <div>
-                                        <p className="text-slate-400 text-sm">Mathematically rank your saved jobs against your Postgres profile.</p>
-                                    </div>
-                                    <div className="relative group/btn w-full md:w-auto mt-2 md:mt-0">
-                                        <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-600 rounded-xl blur opacity-30 group-hover/btn:opacity-60 transition duration-500"></div>
+                                <div className="mb-8">
+                                    <div className="relative group/btn w-full">
+                                        <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl blur opacity-20 group-hover/btn:opacity-50 transition duration-500"></div>
                                         <button
                                             onClick={handleFindMatches}
                                             disabled={isSearching}
-                                            className="relative w-full md:w-auto px-6 py-3 bg-slate-900 text-white font-bold rounded-xl border border-white/10 hover:bg-slate-800 hover:border-purple-500/50 transition-all duration-300 disabled:opacity-80 disabled:cursor-not-allowed active:scale-[0.98] overflow-hidden flex items-center justify-center"
+                                            className="relative w-full px-6 py-4 bg-[#0B101D] text-white font-black uppercase tracking-widest rounded-xl border border-emerald-500/30 hover:border-emerald-400 hover:bg-[#0f172a] transition-all duration-300 disabled:opacity-80 active:scale-[0.99] flex items-center justify-center gap-3 shadow-lg"
                                         >
                                             {isSearching ? (
-                                                <span className="flex items-center justify-center gap-3">
-                                                    <span className="bg-clip-text text-transparent bg-gradient-to-r from-purple-200 to-pink-200 animate-pulse">
-                                                        Calculating Math...
-                                                    </span>
+                                                <span className="text-emerald-400 animate-pulse flex items-center gap-2">
+                                                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                                                    CALCULATING VECTOR MATH...
                                                 </span>
                                             ) : (
-                                                <span className="flex items-center justify-center gap-2 group-hover/btn:tracking-wider transition-all duration-300">
-                                                    <svg className="w-5 h-5 text-purple-400 group-hover/btn:rotate-12 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                                                    Find Best Matches
+                                                <span className="flex items-center gap-2 text-emerald-400 drop-shadow-md">
+                                                    <span className="text-lg">🔍</span> FIND BEST MATCHES
                                                 </span>
                                             )}
                                         </button>
                                     </div>
+                                    <p className="text-slate-500 text-xs font-mono uppercase tracking-widest text-center mt-4">
+                                        Mathematically rank your saved jobs against your 768-D Postgres profile.
+                                    </p>
                                 </div>
 
-                                {/* Results List */}
                                 {topMatches.length > 0 ? (
-                                    <div className="space-y-4">
+                                    <div className="flex flex-col gap-4">
                                         {topMatches.map((match, index) => (
-                                            <div key={match.id} className="group relative overflow-hidden bg-slate-950/40 border border-slate-800/80 p-4 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:border-purple-500/40 hover:bg-slate-900/40 hover:shadow-[0_0_20px_rgba(168,85,247,0.1)] transition-all duration-300">
-                                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-500/5 to-transparent -translate-x-full group-hover:animate-[shimmer_2s_infinite] pointer-events-none"></div>
-                                                <div className="flex items-center gap-4 relative z-10 transition-transform duration-300 group-hover:translate-x-1">
-                                                    <div className="h-10 w-10 rounded-full bg-slate-800/80 text-purple-300 flex items-center justify-center font-bold font-mono text-sm border border-slate-700 shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)]">
+                                            <div key={match.id} className="group relative overflow-hidden bg-[#0f172a] border border-slate-800/80 p-5 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:border-emerald-500/40 hover:bg-[#131c31] transition-all duration-300 shadow-lg hover:shadow-[0_0_20px_rgba(16,185,129,0.05)] cursor-default hover:-translate-x-1">
+
+                                                {/* The Left Neon Border */}
+                                                <div className={`absolute top-0 left-0 w-1.5 h-full ${index === 0 ? 'bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.8)]' : index === 1 ? 'bg-teal-400 shadow-[0_0_10px_rgba(45,212,191,0.6)]' : 'bg-slate-600'}`}></div>
+
+                                                <div className="flex items-center gap-4 relative z-10 pl-2">
+                                                    <div className={`h-10 w-10 rounded-full flex items-center justify-center font-black font-mono text-sm border shadow-inner ${index === 0 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50' : 'bg-slate-800/80 text-slate-400 border-slate-700'}`}>
                                                         #{index + 1}
                                                     </div>
                                                     <div>
-                                                        <h4 className="font-bold text-slate-100 tracking-wide">{match.companyName}</h4>
-                                                        <span className="text-slate-500 text-sm">{match.roleTitle}</span>
+                                                        <h4 className="font-black text-white text-lg uppercase tracking-wide truncate max-w-[250px] md:max-w-[300px]" title={match.companyName}>{match.companyName}</h4>
+                                                        <span className="text-slate-400 text-sm font-medium block truncate max-w-[250px] md:max-w-[300px]" title={match.roleTitle}>{match.roleTitle}</span>
                                                     </div>
                                                 </div>
-                                                <div className="flex gap-3 w-full md:w-auto relative z-10">
-                                                    <div className="flex-1 md:flex-none bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-2 text-center flex flex-col justify-center transition-colors group-hover:bg-emerald-500/20">
-                                                        <div className="text-[10px] text-emerald-400/70 font-bold uppercase tracking-widest mb-0.5">Vector Math</div>
-                                                        <div className="text-emerald-400 font-black drop-shadow-md">{match.vectorMatchScore}%</div>
+
+                                                {/* The Two Distinct Data Pods */}
+                                                <div className="flex gap-3 w-full md:w-auto relative z-10 pl-2 md:pl-0 mt-2 md:mt-0">
+                                                    {/* LLM Vibes / Jarvis Score (Gray/Purple Pod) */}
+                                                    <div className="bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-2 text-center min-w-[100px] shadow-inner">
+                                                        <div className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">Jarvis Score</div>
+                                                        <div className="text-slate-300 font-black text-xl">{match.llmMatchScore}%</div>
                                                     </div>
-                                                    <div className="flex-1 md:flex-none bg-purple-500/10 border border-purple-500/20 rounded-xl px-4 py-2 text-center flex flex-col justify-center transition-colors group-hover:bg-purple-500/20">
-                                                        <div className="text-[10px] text-purple-400/70 font-bold uppercase tracking-widest mb-0.5">LLM Vibes</div>
-                                                        <div className="text-purple-400 font-black drop-shadow-md">{match.llmMatchScore}%</div>
+
+                                                    {/* Vector Math (Glowing Green Pod) */}
+                                                    <div className="bg-emerald-950/30 border border-emerald-500/40 rounded-xl px-4 py-2 text-center min-w-[100px] shadow-[inset_0_0_15px_rgba(16,185,129,0.05)]">
+                                                        <div className="text-[9px] text-emerald-500/80 font-bold uppercase tracking-widest mb-1">Vector Match</div>
+                                                        <div className="text-emerald-400 font-black text-xl drop-shadow-md">{match.vectorMatchScore}%</div>
                                                     </div>
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
                                 ) : (
-                                    <div className="text-center py-12 text-slate-500 border border-dashed border-slate-800 rounded-2xl bg-slate-900/20 backdrop-blur-sm animate-in fade-in duration-1000">
-                                        <div className="text-4xl mb-3 opacity-50">📡</div>
-                                        Awaiting command to query PostgreSQL vector space.
+                                    <div className="text-center py-16 border-2 border-dashed border-slate-800/80 rounded-2xl bg-[#0f172a]/50">
+                                        <span className="text-4xl block mb-4 opacity-50">📡</span>
+                                        <p className="text-slate-500 font-mono text-sm uppercase tracking-widest">Awaiting command to query PostgreSQL</p>
                                     </div>
                                 )}
                             </div>
