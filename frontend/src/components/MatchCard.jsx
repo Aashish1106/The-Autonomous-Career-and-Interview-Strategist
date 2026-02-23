@@ -12,7 +12,7 @@ const MatchCard = () => {
     const [consoleStatus, setConsoleStatus] = useState('idle');
     const [toastMessage, setToastMessage] = useState(null);
 
-    // NEW: Strategic Override States
+    // Strategic Override States
     const [userInstruction, setUserInstruction] = useState('');
     const [coachFeedback, setCoachFeedback] = useState(null);
 
@@ -27,58 +27,47 @@ const MatchCard = () => {
     const [evaluation, setEvaluation] = useState(null);
     const [coverLetter, setCoverLetter] = useState(null);
     const [tailoredSuggestions, setTailoredSuggestions] = useState(null);
-    const [jobId, setJobId] = useState(null); // <--- Tracks the DB record
-    const [lastSavedHash, setLastSavedHash] = useState(null); // <--- Prevents duplicate saving
+    const [jobId, setJobId] = useState(null);
+    const [lastSavedHash, setLastSavedHash] = useState(null);
 
     // --- HELPER FUNCTIONS ---
     const showToast = (message) => {
         setToastMessage(message);
-        setTimeout(() => {
-            setToastMessage(null);
-        }, 3000);
+        setTimeout(() => setToastMessage(null), 3000);
     };
 
     const handleSaveToHistory = async () => {
         if (!evaluation) return;
-
-        // Create a simple hash of the current state to check if we already saved this exact data
         const currentDataString = JSON.stringify({ evaluation, coverLetter, tailoredSuggestions });
-
         if (lastSavedHash === currentDataString) {
             showToast("⚠️ Already Saved: No new changes detected");
             return;
         }
 
         try {
-            const payload = {
-                JobId: jobId,
-                Url: url,
-                JobDescription: jobText,
-                Evaluation: evaluation,
-                CoverLetter: coverLetter,
-                TailoredSuggestions: tailoredSuggestions
-            };
-
-            // Note: We will build this C# endpoint next!
+            const payload = { JobId: jobId, Url: url, JobDescription: jobText, Evaluation: evaluation, CoverLetter: coverLetter, TailoredSuggestions: tailoredSuggestions };
             const response = await fetch("https://localhost:7155/api/JobStrategist/save-history", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
             });
 
-            if (!response.ok) throw new Error("Failed to save to history");
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Backend Error (${response.status}): ${errorText}`);
+            }
 
             const data = await response.json();
-
-            // If it's the first time saving, the backend will return the new DB row ID
             if (data.jobId && !jobId) setJobId(data.jobId);
-
             setLastSavedHash(currentDataString);
             showToast("💾 Application Snapshot Saved to Vault");
 
+            // ---> BROADCAST REFRESH SIGNAL TO VAULT <---
+            window.dispatchEvent(new Event('vaultUpdated'));
+
         } catch (error) {
-            console.error(error);
-            showToast("🚨 Error saving to history");
+            console.error("SAVE ERROR:", error); 
+            showToast(`🚨 ${error.message}`);
         }
     };
 
@@ -91,17 +80,11 @@ const MatchCard = () => {
     // --- HANDLERS ---
     const handleFetchData = async () => {
         if (!url) return showToast("Please enter a job URL.");
-
         setIsFetching(true);
         setConsoleStatus('processing');
         setConsoleLogs(["> INITIATING STEALTH BROWSER ENGINE..."]);
-
-        setJobText('');
-        setScreenshot(null);
-        setEvaluation(null);
-        setCoverLetter(null);
-        setTailoredSuggestions(null);
-        setCoachFeedback(null);
+        setJobText(''); setScreenshot(null); setEvaluation(null); setCoverLetter(null);
+        setTailoredSuggestions(null); setCoachFeedback(null);
 
         try {
             setTimeout(() => setConsoleLogs(prev => [...prev, "> BYPASSING WAF & EXTRACTING DOM..."]), 800);
@@ -117,9 +100,7 @@ const MatchCard = () => {
                 const errorText = await response.text();
                 throw new Error(errorText || "Unknown backend error");
             }
-
             const data = await response.json();
-
             setConsoleStatus('idle');
             setJobText(data.scrapedText);
             setScreenshot(data.screenshotBase64);
@@ -148,7 +129,6 @@ const MatchCard = () => {
 
     const handleEvaluate = async () => {
         if (!jobText) return showToast("Please fetch or paste job description text first.");
-
         setIsEvaluating(true);
         setConsoleStatus('processing');
         setConsoleLogs(["> SPINNING UP SEMANTIC KERNEL..."]);
@@ -157,24 +137,18 @@ const MatchCard = () => {
             setTimeout(() => setConsoleLogs(prev => [...prev, "> TOKENIZING JOB DESCRIPTION & POSTGRESQL PROFILE..."]), 800);
             setTimeout(() => setConsoleLogs(prev => [...prev, "> AWAITING LLM NEURAL EVALUATION . . ."]), 1600);
 
-            const payload = {
-                jobDescriptionText: jobText, // Whatever variable holds your text
-                jobUrl: url // Whatever variable holds the '[https://careers.spglobal](https://careers.spglobal)...' link
-            };
-
+            const payload = { jobDescriptionText: jobText, jobUrl: url };
             const response = await fetch("https://localhost:7155/api/JobStrategist/evaluate-job", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload) // Send the new object
+                body: JSON.stringify(payload)
             });
 
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(errorText || "Unknown backend error");
             }
-
             const data = await response.json();
-
             setConsoleStatus('idle');
             setEvaluation({
                 matchScore: data.evaluation?.match_percentage ?? 0,
@@ -195,37 +169,35 @@ const MatchCard = () => {
 
     const handleTailorResume = async () => {
         setIsTailoring(true);
-        setCoachFeedback(null); // Clear previous feedback
-
+        setCoachFeedback(null);
         try {
-            const payload = {
-                JobDescription: jobText,
-                UserInstruction: userInstruction
-            };
-
+            const payload = { JobDescription: jobText, UserInstruction: userInstruction };
             const response = await fetch("https://localhost:7155/api/JobStrategist/tailor-resume", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload) // SEND NEW PAYLOAD
+                body: JSON.stringify(payload)
             });
 
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Tailoring API Failed (${response.status}):\n${errorText || "Unknown backend error"}`);
             }
-
             const data = await response.json();
 
             // CHECK THE GATEKEEPER
             if (data.is_instruction_accepted === false) {
                 setCoachFeedback(data.coach_feedback);
-                return; // Stop execution, don't update resume
+                return;
             }
 
-            // If accepted, update as normal
-            if (userInstruction) showToast("Strategic Override Applied");
             setTailoredSuggestions(data.suggestions);
 
+            // ---> NEW: Always show a toast! <---
+            if (userInstruction) {
+                showToast("✨ Override Applied & Resume Tailored");
+            } else {
+                showToast("✨ Resume Tailored Successfully");
+            }
         } catch (error) {
             alert(`🚨 ${error.message}`);
             console.error(error);
@@ -236,37 +208,35 @@ const MatchCard = () => {
 
     const handleGenerateLetter = async () => {
         setIsGeneratingLetter(true);
-        setCoachFeedback(null); // Clear previous feedback
-
+        setCoachFeedback(null);
         try {
-            const payload = {
-                JobDescription: jobText,
-                UserInstruction: userInstruction
-            };
-
+            const payload = { JobDescription: jobText, UserInstruction: userInstruction };
             const response = await fetch("https://localhost:7155/api/JobStrategist/generate-cover-letter", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload) // SEND NEW PAYLOAD
+                body: JSON.stringify(payload)
             });
 
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Cover Letter API Failed (${response.status}):\n${errorText || "Unknown backend error"}`);
             }
-
             const data = await response.json();
 
             // CHECK THE GATEKEEPER
             if (data.is_instruction_accepted === false) {
                 setCoachFeedback(data.coach_feedback);
-                return; // Stop execution, don't output letter
+                return;
             }
 
-            // If accepted, update as normal
-            if (userInstruction) showToast("Strategic Override Applied");
             setCoverLetter(data.cover_letter);
 
+            // ---> NEW: Always show a toast! <---
+            if (userInstruction) {
+                showToast("📝 Override Applied & Letter Drafted");
+            } else {
+                showToast("📝 Cover Letter Generated Successfully");
+            }
         } catch (error) {
             alert(`🚨 ${error.message}`);
             console.error(error);
@@ -278,16 +248,9 @@ const MatchCard = () => {
     const handleDelete = async () => {
         setIsDeleting(true);
         setTimeout(() => {
-            setJobText('');
-            setEvaluation(null);
-            setCoverLetter(null);
-            setTailoredSuggestions(null);
-            setUrl('');
-            setUserInstruction('');
-            setCoachFeedback(null);
-            setJobId(null); // <--- Clear Job ID
-            setLastSavedHash(null); // <--- Clear Hash
-            setIsDeleting(false);
+            setJobText(''); setEvaluation(null); setCoverLetter(null); setTailoredSuggestions(null);
+            setUrl(''); setUserInstruction(''); setCoachFeedback(null); setJobId(null);
+            setLastSavedHash(null); setScreenshot(null); setIsDeleting(false);
         }, 2000);
     };
 
@@ -329,12 +292,8 @@ const MatchCard = () => {
                 {isFetching || (consoleStatus === 'error' && !jobText && !evaluation) ? (
                     <div className="py-2 animate-in fade-in duration-500">
                         <AgentConsole mode="scraping" logs={consoleLogs} status={consoleStatus} />
-
                         {consoleStatus === 'error' && !isFetching && (
-                            <button
-                                onClick={() => setConsoleStatus('idle')}
-                                className="mt-4 w-full py-4 bg-red-950/20 border border-red-500/30 hover:bg-red-900/40 rounded-xl text-red-400 text-xs font-bold tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(248,113,113,0.1)]"
-                            >
+                            <button onClick={() => setConsoleStatus('idle')} className="mt-4 w-full py-4 bg-red-950/20 border border-red-500/30 hover:bg-red-900/40 rounded-xl text-red-400 text-xs font-bold tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(248,113,113,0.1)]">
                                 Acknowledge Error & Paste Manually
                             </button>
                         )}
@@ -364,12 +323,8 @@ const MatchCard = () => {
                             isEvaluating || (consoleStatus === 'error' && jobText) ? (
                                 <div className="py-2 mt-4 animate-in fade-in duration-500">
                                     <AgentConsole mode="evaluating" logs={consoleLogs} status={consoleStatus} />
-
                                     {consoleStatus === 'error' && !isEvaluating && (
-                                        <button
-                                            onClick={() => setConsoleStatus('idle')}
-                                            className="mt-4 w-full py-4 bg-red-950/20 border border-red-500/30 hover:bg-red-900/40 rounded-xl text-red-400 text-xs font-bold tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(248,113,113,0.1)]"
-                                        >
+                                        <button onClick={() => setConsoleStatus('idle')} className="mt-4 w-full py-4 bg-red-950/20 border border-red-500/30 hover:bg-red-900/40 rounded-xl text-red-400 text-xs font-bold tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(248,113,113,0.1)]">
                                             Dismiss Error & Retry Evaluation
                                         </button>
                                     )}
@@ -432,20 +387,17 @@ const MatchCard = () => {
                             </div>
                         )}
 
-                        {/* THE JARVIS VERDICT BANNER */}
                         <div className="mb-8">
                             <div className={`w-full py-5 rounded-xl flex flex-col items-center justify-center gap-2 border border-dashed relative overflow-hidden ${evaluation.matchScore >= 80 ? 'bg-emerald-950/20 text-emerald-400 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.05)]' :
-                                    evaluation.matchScore >= 60 ? 'bg-yellow-950/20 text-yellow-400 border-yellow-500/50' :
-                                        'bg-pink-950/20 text-pink-500 border-pink-500/50 shadow-[0_0_20px_rgba(236,72,153,0.05)]'
+                                evaluation.matchScore >= 60 ? 'bg-yellow-950/20 text-yellow-400 border-yellow-500/50' :
+                                    'bg-pink-950/20 text-pink-500 border-pink-500/50 shadow-[0_0_20px_rgba(236,72,153,0.05)]'
                                 }`}>
                                 <span className="text-[10px] font-black opacity-70 tracking-[0.3em] uppercase">Jarvis Final Verdict</span>
-
                                 <span className="text-lg font-black uppercase tracking-widest drop-shadow-md">
                                     {evaluation.matchScore >= 80 ? '🟢 High Match: Proceed to Apply' :
                                         evaluation.matchScore >= 60 ? '🟡 Moderate Match: Tailor Heavily' :
                                             '🔴 Low Match: Pass on this Role'}
                                 </span>
-
                                 <span className="text-xs font-serif text-slate-400 mt-1 max-w-lg text-center leading-relaxed">
                                     "{evaluation.action}"
                                 </span>
@@ -453,8 +405,6 @@ const MatchCard = () => {
                         </div>
 
                         {/* --- GATEKEEPER UI INTERVENTION --- */}
-
-                        {/* 1. The Coach Feedback Banner (Only visible if instruction rejected) */}
                         {coachFeedback && (
                             <div className="mb-4 p-5 rounded-xl bg-amber-950/20 border border-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.05)] animate-in slide-in-from-top-4 fade-in duration-500 flex items-start gap-4">
                                 <span className="text-amber-400 text-2xl mt-1 animate-pulse">💡</span>
@@ -468,7 +418,6 @@ const MatchCard = () => {
                             </div>
                         )}
 
-                        {/* 2. The Optional Custom Instruction Input */}
                         <div className="mb-5">
                             <div className="flex items-center gap-3 bg-slate-900 border border-slate-700 hover:border-blue-500/50 rounded-xl p-3 px-5 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/50 transition-all shadow-inner">
                                 <span className="text-blue-400/70 text-sm">🎯</span>
@@ -477,7 +426,7 @@ const MatchCard = () => {
                                     value={userInstruction}
                                     onChange={(e) => {
                                         setUserInstruction(e.target.value);
-                                        if (coachFeedback) setCoachFeedback(null); // Clear warning as they type a fix
+                                        if (coachFeedback) setCoachFeedback(null);
                                     }}
                                     placeholder="Optional: Provide custom instructions for Jarvis (e.g., 'Focus heavily on my .NET architecture skills')..."
                                     className="w-full bg-transparent text-slate-300 outline-none text-sm placeholder-slate-600 font-mono"
@@ -485,38 +434,38 @@ const MatchCard = () => {
                             </div>
                         </div>
 
-                        {/* --- ACTION BUTTONS --- */}
-                        <div className="flex flex-col md:flex-row gap-4 w-full">
+                        {/* --- ACTION BUTTONS (VERTICAL LIST WITH GLOW ANIMATIONS) --- */}
+                        <div className="flex flex-col gap-4 w-full mb-10">
 
                             {/* Clear Data Button */}
-                            <div className="relative group/btn flex-1">
+                            <div className="relative group/btn w-full">
                                 <div className="absolute -inset-0.5 bg-gradient-to-r from-slate-700 to-slate-600 rounded-xl blur opacity-20 group-hover/btn:opacity-50 transition duration-500"></div>
-                                <button onClick={handleDelete} className="relative w-full py-4 bg-slate-900 text-slate-400 font-bold uppercase tracking-widest rounded-xl border border-slate-700 hover:border-slate-500 hover:text-slate-200 transition-all duration-300 active:scale-[0.98] flex items-center justify-center">
+                                <button onClick={handleDelete} className="relative w-full py-4 bg-[#0f172a] text-slate-400 font-bold uppercase tracking-widest rounded-xl border border-slate-700 hover:border-slate-500 hover:text-slate-200 transition-all duration-300 active:scale-[0.98] flex items-center justify-center">
                                     <span className="group-hover/btn:tracking-wider transition-all duration-300">
                                         Clear Screen
                                     </span>
                                 </button>
                             </div>
 
-                            {/* ---> NEW: Save to History Button <--- */}
-                            <div className="relative group/btn flex-1">
+                            {/* Save to History Button */}
+                            <div className="relative group/btn w-full">
                                 <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 to-cyan-500 rounded-xl blur opacity-30 group-hover/btn:opacity-70 transition duration-500"></div>
-                                <button onClick={handleSaveToHistory} className="relative w-full py-4 bg-slate-900 text-blue-300 font-bold uppercase tracking-widest rounded-xl border border-blue-500/30 hover:border-blue-400 hover:bg-blue-950/30 transition-all duration-300 active:scale-[0.98] flex items-center justify-center">
+                                <button onClick={handleSaveToHistory} className="relative w-full py-4 bg-[#0f172a] text-blue-300 font-bold uppercase tracking-widest rounded-xl border border-blue-500/30 hover:border-blue-400 hover:bg-blue-950/30 transition-all duration-300 active:scale-[0.98] flex items-center justify-center">
                                     <span className="group-hover/btn:tracking-wider transition-all duration-300 flex items-center gap-2">
-                                        <span>💾</span> Save Snapshot
+                                        <span className="text-lg drop-shadow-md">💾</span> Save Snapshot
                                     </span>
                                 </button>
                             </div>
 
                             {/* Auto-Tailor Button */}
                             {isTailoring ? (
-                                <div className="flex-1"><GenAILoader message="Optimizing Keywords..." /></div>
+                                <div className="w-full"><GenAILoader message="Optimizing Keywords..." /></div>
                             ) : (
-                                <div className="relative group/btn flex-1">
+                                <div className="relative group/btn w-full">
                                     <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl blur opacity-30 group-hover/btn:opacity-70 transition duration-500"></div>
-                                    <button onClick={handleTailorResume} className="relative w-full py-4 bg-slate-900 text-purple-300 font-bold uppercase tracking-widest rounded-xl border border-purple-500/30 hover:border-purple-400 hover:bg-purple-950/30 transition-all duration-300 active:scale-[0.98] flex items-center justify-center">
+                                    <button onClick={handleTailorResume} className="relative w-full py-4 bg-[#0f172a] text-purple-300 font-bold uppercase tracking-widest rounded-xl border border-purple-500/30 hover:border-purple-400 hover:bg-purple-950/30 transition-all duration-300 active:scale-[0.98] flex items-center justify-center">
                                         <span className="group-hover/btn:tracking-wider transition-all duration-300 flex items-center gap-2">
-                                            <span>✨</span> Auto-Tailor
+                                            <span className="text-lg drop-shadow-md">✨</span> Auto-Tailor Resume
                                         </span>
                                     </button>
                                 </div>
@@ -524,17 +473,18 @@ const MatchCard = () => {
 
                             {/* Generate Letter Button */}
                             {isGeneratingLetter ? (
-                                <div className="flex-1"><GenAILoader message="Drafting Cover Letter..." /></div>
+                                <div className="w-full"><GenAILoader message="Drafting Cover Letter..." /></div>
                             ) : (
-                                <div className="relative group/btn flex-1">
+                                <div className="relative group/btn w-full">
                                     <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-600 to-teal-500 rounded-xl blur opacity-30 group-hover/btn:opacity-70 transition duration-500"></div>
-                                    <button onClick={handleGenerateLetter} className="relative w-full py-4 bg-slate-900 text-emerald-300 font-bold uppercase tracking-widest rounded-xl border border-emerald-500/30 hover:border-emerald-400 hover:bg-emerald-950/30 transition-all duration-300 active:scale-[0.98] flex items-center justify-center">
+                                    <button onClick={handleGenerateLetter} className="relative w-full py-4 bg-[#0f172a] text-emerald-300 font-bold uppercase tracking-widest rounded-xl border border-emerald-500/30 hover:border-emerald-400 hover:bg-emerald-950/30 transition-all duration-300 active:scale-[0.98] flex items-center justify-center">
                                         <span className="group-hover/btn:tracking-wider transition-all duration-300 flex items-center gap-2">
-                                            <span>📝</span> Generate Letter
+                                            <span className="text-lg drop-shadow-md">📝</span> Generate Letter
                                         </span>
                                     </button>
                                 </div>
                             )}
+
                         </div>
 
                         {tailoredSuggestions && Array.isArray(tailoredSuggestions) && (
@@ -563,31 +513,24 @@ const MatchCard = () => {
                                                     const isBest = vIndex === suggestion.best_variation_index;
                                                     return (
                                                         <div key={vIndex} className={`p-4 rounded-xl border relative transition-all duration-300 group/copy ${isBest ? 'bg-emerald-950/20 border-emerald-500/50 shadow-[inset_0_0_15px_rgba(16,185,129,0.05)]' : 'bg-slate-800/30 border-slate-700/50 hover:bg-slate-800/50'}`}>
-
                                                             {isBest && (
                                                                 <div className="absolute -top-3 -right-2 bg-emerald-500 text-slate-950 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-[0_0_10px_rgba(16,185,129,0.5)] z-10">Jarvis Top Pick ⭐</div>
                                                             )}
-
                                                             <div className="flex justify-between items-start mb-2">
                                                                 <div className={`text-[10px] font-bold uppercase tracking-wider ${isBest ? 'text-emerald-400' : 'text-slate-500'}`}>
                                                                     Focus: {variation.focus}
                                                                 </div>
-
                                                                 <button
                                                                     onClick={() => {
                                                                         navigator.clipboard.writeText(variation.text);
                                                                         showToast(`Copied: ${variation.focus} Variation`);
                                                                     }}
-                                                                    className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border transition-all duration-200 opacity-0 group-hover/copy:opacity-100 ${isBest
-                                                                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-                                                                        : 'bg-slate-700/50 text-slate-400 border-slate-600 hover:bg-slate-700 hover:text-slate-200'
-                                                                        }`}
+                                                                    className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border transition-all duration-200 opacity-0 group-hover/copy:opacity-100 ${isBest ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20' : 'bg-slate-700/50 text-slate-400 border-slate-600 hover:bg-slate-700 hover:text-slate-200'}`}
                                                                     title="Copy this bullet to clipboard"
                                                                 >
                                                                     Copy
                                                                 </button>
                                                             </div>
-
                                                             <div className={`text-sm leading-relaxed font-serif ${isBest ? 'text-emerald-100' : 'text-slate-300'}`}>
                                                                 {variation.text}
                                                             </div>
@@ -613,23 +556,11 @@ const MatchCard = () => {
                                     <h4 className="text-sm font-bold text-white flex items-center gap-2">
                                         <span className="bg-emerald-500/20 p-1.5 rounded-lg text-emerald-400">📝</span> Tailored Cover Letter
                                     </h4>
-
                                     <div className="flex gap-3">
-                                        <button
-                                            onClick={handleDownloadPDF}
-                                            className="text-xs font-bold text-blue-400 hover:text-blue-300 uppercase tracking-widest bg-blue-500/10 px-3 py-1.5 rounded-lg border border-blue-500/20 hover:bg-blue-500/20 transition-colors flex items-center gap-2"
-                                            title="Download as PDF"
-                                        >
+                                        <button onClick={handleDownloadPDF} className="text-xs font-bold text-blue-400 hover:text-blue-300 uppercase tracking-widest bg-blue-500/10 px-3 py-1.5 rounded-lg border border-blue-500/20 hover:bg-blue-500/20 transition-colors flex items-center gap-2">
                                             <span>📄</span> Export PDF
                                         </button>
-
-                                        <button
-                                            onClick={() => {
-                                                navigator.clipboard.writeText(coverLetter);
-                                                showToast("Cover Letter Copied to Clipboard");
-                                            }}
-                                            className="text-xs font-bold text-emerald-400 hover:text-emerald-300 uppercase tracking-widest bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
-                                        >
+                                        <button onClick={() => { navigator.clipboard.writeText(coverLetter); showToast("Cover Letter Copied to Clipboard"); }} className="text-xs font-bold text-emerald-400 hover:text-emerald-300 uppercase tracking-widest bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors">
                                             Copy Text
                                         </button>
                                     </div>

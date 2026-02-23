@@ -536,7 +536,7 @@ namespace AutoJobStrategist.Api.Controllers
                         record.RoleTitle = roleProp.GetString();
 
                     if (request.Evaluation.Value.TryGetProperty("matchScore", out var scoreProp))
-                        record.MatchScore = scoreProp.GetInt32();
+                        record.MatchScore = (int)Math.Round(scoreProp.GetDouble());
                 }
 
                 // Update Cover Letter & Tailored Snippets
@@ -695,6 +695,135 @@ namespace AutoJobStrategist.Api.Controllers
             }
         }
 
+        [HttpPost("generate-interview-questions")]
+        public async Task<IActionResult> GenerateInterviewQuestions([FromBody] InterviewGenerationRequest request)
+        {
+            var userProfile = await _context.UserProfiles
+                .FirstOrDefaultAsync(u => u.Id == Guid.Parse("11111111-1111-1111-1111-111111111111"));
+
+            if (userProfile == null) return NotFound("User profile not found.");
+
+            var myResumeContext = $@"
+        Experience: {userProfile.BaseResumeText}
+        Core Skills: {string.Join(", ", userProfile.CoreSkills)}";
+
+            var promptTemplate = @"
+        You are an elite, technical Principal Engineer conducting a rigorous job interview.
+        Review the candidate's resume and the target job description.
+        
+        Job Description: {{$jobText}}
+        Candidate Resume: {{$resumeText}}
+
+        TASK: Generate 3 highly specific, challenging interview questions. 
+        - DO NOT ask generic behavioral questions (e.g., 'What is your weakness?').
+        - DO ask scenario-based technical questions.
+        - Probe the intersection of their skills and the job. If the job requires a skill they lack, ask how they would adapt.
+
+        IMPORTANT: Return strictly valid JSON matching this exact structure:
+        {
+            ""questions"": [
+                {
+                    ""focus_area"": ""[e.g., System Architecture, Cloud Migration, Database Optimization]"",
+                    ""question_text"": ""[The specific interview question]"",
+                    ""ideal_concept_to_mention"": ""[What a 10/10 answer should technically include]""
+                }
+            ]
+        }";
+
+            try
+            {
+                var arguments = new KernelArguments()
+                {
+                    { "jobText", request.JobDescription },
+                    { "resumeText", myResumeContext }
+                };
+
+                var result = await _kernel.InvokePromptAsync(promptTemplate, arguments);
+                var rawResponse = result.ToString();
+
+                var startIndex = rawResponse.IndexOf('{');
+                var endIndex = rawResponse.LastIndexOf('}');
+
+                if (startIndex != -1 && endIndex != -1)
+                {
+                    var cleanJson = rawResponse.Substring(startIndex, endIndex - startIndex + 1);
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var state = JsonSerializer.Deserialize<InterviewQuestionState>(cleanJson, options);
+                    return Ok(state);
+                }
+
+                return StatusCode(500, "Agent failed to return valid JSON.");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Interview Generation Failed: {ex.Message}");
+            }
+        }
+
+        [HttpPost("evaluate-interview-answer")]
+        public async Task<IActionResult> EvaluateInterviewAnswer([FromBody] EvaluateAnswerRequest request)
+        {
+            var promptTemplate = @"
+        You are a strict, elite technical hiring manager and executive career coach. 
+        You asked the candidate the following interview question for a specific job.
+        
+        Job Context: {{$jobText}}
+        Question Asked: {{$questionText}}
+        Candidate's Answer: {{$userAnswer}}
+
+        TASK: Evaluate the candidate's answer. Be brutally honest, highly technical, and constructive.
+        Additionally, identify exactly what technical concepts the candidate is weak on and recommend 2 highly specific learning resources.
+
+        IMPORTANT: Return strictly valid JSON matching this exact structure:
+        {
+            ""score"": 85, 
+            ""feedback"": ""[Constructive feedback on what was good and what was missing]"",
+            ""better_answer_example"": ""[A 1-2 sentence example of how an elite candidate would have answered]"",
+            ""recommended_resources"": [
+                {
+                    ""platform"": ""[e.g., YouTube, Microsoft Learn, LeetCode, Official Docs, GeeksforGeeks, Medium]"",
+                    ""topic"": ""[Specific concept they missed]"",
+                    ""search_query"": ""[The exact search string to find the answer]""
+                },
+                {
+                    ""platform"": ""GeeksforGeeks"",
+                    ""topic"": ""[Algorithm or system design concept]"",
+                    ""search_query"": ""[The exact search string]""
+                }
+            ]
+        }";
+
+            try
+            {
+                var arguments = new KernelArguments()
+                {
+                    { "jobText", request.JobDescription },
+                    { "questionText", request.QuestionText },
+                    { "userAnswer", request.UserAnswer }
+                };
+
+                var result = await _kernel.InvokePromptAsync(promptTemplate, arguments);
+                var rawResponse = result.ToString();
+
+                var startIndex = rawResponse.IndexOf('{');
+                var endIndex = rawResponse.LastIndexOf('}');
+
+                if (startIndex != -1 && endIndex != -1)
+                {
+                    var cleanJson = rawResponse.Substring(startIndex, endIndex - startIndex + 1);
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var state = JsonSerializer.Deserialize<AnswerEvaluationState>(cleanJson, options);
+                    return Ok(state);
+                }
+
+                return StatusCode(500, "Agent failed to return valid JSON.");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Evaluation Failed: {ex.Message}");
+            }
+        }
+
     }
 
     // ---> ENFORCED DATA CONTRACTS <---
@@ -797,6 +926,63 @@ namespace AutoJobStrategist.Api.Controllers
         public System.Text.Json.JsonElement? StructuredResumeJson { get; set; }
     }
 
-    
+    // ---> INTERVIEW STRATEGIST DTOs <---
+    public class InterviewGenerationRequest
+    {
+        public string JobDescription { get; set; } = string.Empty;
+    }
+
+    public class InterviewQuestionState
+    {
+        [JsonPropertyName("questions")]
+        public List<InterviewQuestion> Questions { get; set; } = new();
+    }
+
+    public class InterviewQuestion
+    {
+        [JsonPropertyName("focus_area")]
+        public string FocusArea { get; set; } = string.Empty;
+
+        [JsonPropertyName("question_text")]
+        public string QuestionText { get; set; } = string.Empty;
+
+        [JsonPropertyName("ideal_concept_to_mention")]
+        public string IdealConceptToMention { get; set; } = string.Empty;
+    }
+
+    public class EvaluateAnswerRequest
+    {
+        public string QuestionText { get; set; } = string.Empty;
+        public string UserAnswer { get; set; } = string.Empty;
+        public string JobDescription { get; set; } = string.Empty;
+    }
+
+    public class AnswerEvaluationState
+    {
+        [JsonPropertyName("score")]
+        public int Score { get; set; }
+
+        [JsonPropertyName("feedback")]
+        public string Feedback { get; set; } = string.Empty;
+
+        [JsonPropertyName("better_answer_example")]
+        public string BetterAnswerExample { get; set; } = string.Empty;
+
+        [JsonPropertyName("recommended_resources")]
+        public List<RecommendedResource> RecommendedResources { get; set; } = new();
+    }
+
+    public class RecommendedResource
+    {
+        [JsonPropertyName("platform")]
+        public string Platform { get; set; } = string.Empty; // e.g., "YouTube", "GeeksforGeeks", "Microsoft Learn"
+
+        [JsonPropertyName("topic")]
+        public string Topic { get; set; } = string.Empty; // e.g., "Understanding Azure CI/CD Pipelines"
+
+        [JsonPropertyName("search_query")]
+        public string SearchQuery { get; set; } = string.Empty; // e.g., "Azure DevOps CI/CD pipeline tutorial"
+    }
+
 } 
 

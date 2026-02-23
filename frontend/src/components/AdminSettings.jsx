@@ -22,7 +22,6 @@ const AdminSettings = () => {
         setTimeout(() => setToastMessage(null), 4000);
     };
 
-    // ---> DYNAMIC ENTRY SPAWNERS <---
     const addExperience = () => {
         setResumeData(prev => ({
             ...prev,
@@ -44,7 +43,6 @@ const AdminSettings = () => {
         }));
     };
 
-    // ---> DYNAMIC FIELD UPDATERS <---
     const updateCollection = (collection, index, field, value) => {
         const updated = [...resumeData[collection]];
         updated[index][field] = value;
@@ -111,8 +109,16 @@ const AdminSettings = () => {
         <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24">
             <style>
                 {`
-                    @keyframes hammerStrike { 0%, 100% { transform: rotate(30deg); } 15% { transform: rotate(-50deg); } 25% { transform: rotate(30deg); } }
-                    @keyframes nutShake { 0%, 100% { transform: translate(0, 0); } 15% { transform: translate(-4px, 2px) rotate(-5deg); } 18% { transform: translate(4px, -2px) rotate(5deg); } 25% { transform: translate(0, 0); } }
+                    @keyframes scan {
+                        0%, 100% { top: -10%; opacity: 0; }
+                        20% { opacity: 1; }
+                        80% { top: 110%; opacity: 1; }
+                    }
+                    @keyframes pulse-ring {
+                        0% { transform: scale(0.85); box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.4); }
+                        70% { transform: scale(1); box-shadow: 0 0 0 20px rgba(168, 85, 247, 0); }
+                        100% { transform: scale(0.85); box-shadow: 0 0 0 0 rgba(168, 85, 247, 0); }
+                    }
                 `}
             </style>
 
@@ -125,12 +131,18 @@ const AdminSettings = () => {
                 <div onClick={() => fileInputRef.current.click()} className="mb-10 border-2 border-dashed border-slate-700 rounded-2xl p-12 text-center hover:bg-slate-800/50 cursor-pointer transition-all group">
                     <input type="file" ref={fileInputRef} hidden onChange={handleFileUpload} />
                     {isUploading ? (
-                        <div className="flex flex-col items-center">
-                            <div className="relative w-32 h-24 mb-4">
-                                <div className="absolute text-6xl" style={{ animation: 'nutShake 2s infinite' }}>🌰</div>
-                                <div className="absolute text-7xl origin-bottom-right translate-x-8" style={{ animation: 'hammerStrike 2s infinite' }}>🔨</div>
+                        <div className="flex flex-col items-center py-6 animate-in fade-in duration-500">
+                            <div className="relative w-32 h-32 mb-8 flex items-center justify-center">
+                                <div className="absolute inset-0 rounded-full border-t-2 border-b-2 border-purple-500/40 animate-[spin_3s_linear_infinite] shadow-[0_0_15px_rgba(168,85,247,0.2)]"></div>
+                                <div className="absolute inset-2 rounded-full border-l-2 border-r-2 border-blue-400/50 animate-[spin_2s_linear_infinite_reverse] shadow-[0_0_10px_rgba(96,165,250,0.2)]"></div>
+                                <div className="absolute inset-6 rounded-full bg-gradient-to-br from-purple-900/40 to-blue-900/40 backdrop-blur-md border border-white/10 flex items-center justify-center" style={{ animation: 'pulse-ring 2s cubic-bezier(0.4,0,0.6,1) infinite' }}>
+                                    <div className="w-12 h-12 rounded-full bg-purple-500/20 absolute animate-ping"></div>
+                                    <span className="text-3xl relative z-10 drop-shadow-[0_0_10px_rgba(168,85,247,0.8)]">🧠</span>
+                                </div>
+                                <div className="absolute left-[-10%] w-[120%] h-[2px] bg-cyan-400 shadow-[0_0_12px_rgba(34,211,238,1)] z-20" style={{ animation: 'scan 2.5s ease-in-out infinite' }}></div>
                             </div>
-                            <h3 className="text-purple-400 font-black animate-pulse uppercase tracking-widest">Jarvis is cracking the PDF...</h3>
+                            <h3 className="text-purple-400 font-black uppercase tracking-[0.25em] text-sm animate-pulse drop-shadow-md">Cracking Neural Vault</h3>
+                            <p className="text-slate-500 text-[10px] font-mono mt-3 uppercase tracking-widest">Extracting 768-Dimensional Vectors...</p>
                         </div>
                     ) : (
                         <div className="space-y-2">
@@ -142,8 +154,6 @@ const AdminSettings = () => {
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-12">
-
-                    {/* CORE SUMMARY & METADATA */}
                     <div className="space-y-6 p-6 bg-slate-950/40 rounded-2xl border border-slate-800/60 shadow-inner">
                         <div>
                             <label className="text-[10px] font-black text-purple-400 uppercase tracking-widest block mb-2">🎯 Profile Summary</label>
@@ -161,7 +171,6 @@ const AdminSettings = () => {
                         </div>
                     </div>
 
-                    {/* PROFESSIONAL ARSENAL (Experience) */}
                     <div>
                         <div className="flex justify-between items-center mb-4 border-b border-slate-800 pb-2">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Professional Arsenal</label>
@@ -180,7 +189,6 @@ const AdminSettings = () => {
                         </div>
                     </div>
 
-                    {/* STRATEGIC PROJECTS */}
                     <div>
                         <div className="flex justify-between items-center mb-4 border-b border-slate-800 pb-2">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Strategic Projects</label>
@@ -197,7 +205,6 @@ const AdminSettings = () => {
                         </div>
                     </div>
 
-                    {/* ACADEMIC ARSENAL (Education) */}
                     <div>
                         <div className="flex justify-between items-center mb-4 border-b border-slate-800 pb-2">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Academic Arsenal</label>
@@ -215,7 +222,6 @@ const AdminSettings = () => {
                         </div>
                     </div>
 
-                    {/* FINAL ACTION BAR */}
                     <div className="pt-8 flex justify-between items-center border-t border-slate-800">
                         <button type="button" onClick={() => setResumeData(initialFormState)} className="text-slate-500 hover:text-red-400 text-[10px] font-black uppercase tracking-widest transition-colors">🗑️ Reset Form</button>
                         <button type="submit" disabled={isSaving || isUploading} className="bg-purple-600 hover:bg-purple-500 text-white px-12 py-4 rounded-xl font-black uppercase text-xs shadow-xl transition-all hover:-translate-y-1 active:scale-95 disabled:opacity-50">
