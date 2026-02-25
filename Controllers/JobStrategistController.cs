@@ -6,10 +6,11 @@ using Microsoft.Playwright;
 using Microsoft.SemanticKernel;
 using Pgvector;
 using Pgvector.EntityFrameworkCore;
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using UglyToad.PdfPig;
 using System.Text.RegularExpressions;
+using UglyToad.PdfPig;
 
 namespace AutoJobStrategist.Api.Controllers
 {
@@ -106,8 +107,9 @@ namespace AutoJobStrategist.Api.Controllers
             // 1. Strip out null bytes and unprintable PDF ghost characters
             string cleaned = rawText.Replace("\0", " ");
 
-            // 2. Squash massive whitespace gaps (turns 50 blank lines into 1 space)
-            cleaned = Regex.Replace(cleaned, @"\s+", " ");
+            // 2. Squash horizontal spaces/tabs, but PRESERVE NEWLINES (\n)!
+            // Resumes need line breaks for the LLM to understand context.
+            cleaned = Regex.Replace(cleaned, @"[ \t]+", " ");
 
             return cleaned.Trim();
         }
@@ -224,19 +226,26 @@ namespace AutoJobStrategist.Api.Controllers
                 var promptTemplate = @"
         You are ACE, an elite technical recruiter and data architect. Analyze the following raw resume text and extract the key information into a highly structured JSON format. 
         
+        var promptTemplate = @""
+        You are ACE, an elite technical recruiter and data architect. Analyze the following raw resume text and extract the key information into a highly structured JSON format. 
+        
         CRITICAL INSTRUCTIONS:
         - Return ONLY valid JSON. Do not include markdown formatting (like ```json), and do not include conversational text.
-        - You must accurately extract the person's full name.
-        - Match this exact schema structure:
+        - You MUST use these EXACT keys for the core identity so the UI binds correctly:
         {
-          ""fullName"": ""string"",
-          ""profileSummary"": ""string"",
-          ""coreSkills"": [""string""],
-          ""workExperience"": [{ ""company"": ""string"", ""role"": ""string"", ""duration"": ""string"", ""bullets"": [""string""] }],
-          ""education"": [{ ""institution"": ""string"", ""degree"": ""string"", ""duration"": ""string"" }],
-          ""projects"": [{ ""name"": ""string"", ""technologies"": [""string""], ""description"": ""string"" }],
-          ""certifications"": [""string""]
+          """"fullName"""": """"string"""",
+          """"profileSummary"""": """"string"""",
+          """"coreSkills"""": """"string (comma separated)"""",
+          """"workExperience"""": [{ """"company"""": """"string"""", """"role"""": """"string"""", """"duration"""": """"string"""", """"bullets"""": [""""string""""] }],
+          """"education"""": [{ """"institution"""": """"string"""", """"degree"""": """"string"""", """"duration"""": """"string"""" }],
+          """"projects"""": [{ """"name"""": """"string"""", """"technologies"""": [""""string""""], """"description"""": """"string"""" }],
+          """"certifications"""": """"string""""
         }
+
+        DYNAMIC SECTIONS RULE (ZERO DATA LOSS MANDATE):
+        - You MUST extract 100% of the information from the resume. Do not leave any section behind.
+        - If you encounter ANY distinct section heading in the text (such as 'Social Engagements', 'Volunteering', 'Hobbies', 'Patents', etc.) that does not perfectly fit the core schema, you MUST create a new root-level JSON key for it using camelCase (e.g., ""socialEngagements"").
+        - Extract the contents of these custom sections as an array of strings or a single formatted string. DO NOT silently drop information.
 
         RAW TEXT:
         {{$resumeText}}";

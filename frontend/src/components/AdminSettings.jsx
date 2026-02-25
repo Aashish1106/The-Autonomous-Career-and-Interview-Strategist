@@ -156,22 +156,38 @@ const AdminSettings = () => {
                 signal: abortControllerRef.current.signal // Attach the kill switch
             });
 
+            // ---> CRITICAL FIX 1: THE CRASH TRAP <---
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText); // Throw it to the catch block below
+            }
+
             const aiData = await response.json();
             const formattedSkills = Array.isArray(aiData.coreSkills) ? aiData.coreSkills.join(', ') : (aiData.coreSkills || '');
             const formattedCerts = Array.isArray(aiData.certifications) ? aiData.certifications.join('\n') : (aiData.certifications || '');
 
+            // ---> CRITICAL FIX 2: PRESERVE DYNAMIC SECTIONS <---
             setResumeData({
-                fullName: aiData.fullName || '', profileSummary: aiData.profileSummary || '', coreSkills: formattedSkills,
-                workExperience: aiData.workExperience || [], education: aiData.education || [], projects: aiData.projects || [],
+                ...aiData, // This ensures "Social Engagements" or any custom keys Gemini finds are saved!
+                fullName: aiData.fullName || '',
+                profileSummary: aiData.profileSummary || '',
+                coreSkills: formattedSkills,
+                workExperience: aiData.workExperience || [],
+                education: aiData.education || [],
+                projects: aiData.projects || [],
                 certifications: formattedCerts
             });
+
             showToast("✅ PDF Extracted (Review Draft)");
+
         } catch (error) {
             if (error.name === 'AbortError') {
                 showToast("🛑 AI Extraction Cancelled");
             } else {
-                console.error(error);
-                showToast("🚨 PDF Extraction Failed");
+                console.error("Backend PDF Error:", error.message);
+
+                // Show the ACTUAL C# error to the user so we know why it failed
+                showToast(`🚨 Extraction Failed: ${error.message.substring(0, 50)}...`);
             }
         } finally {
             setIsUploading(false);
@@ -384,6 +400,33 @@ const AdminSettings = () => {
                                         )) : <p className="text-slate-500 text-sm italic">No education records found.</p>}
                                     </div>
                                 </div>
+
+                                {/* ---> NEW: READ-ONLY DYNAMIC SECTIONS <--- */}
+                                {Object.entries(resumeData).map(([key, value]) => {
+                                    const standardKeys = ['fullName', 'profileSummary', 'coreSkills', 'certifications', 'workExperience', 'projects', 'education'];
+                                    if (standardKeys.includes(key)) return null;
+                                    if (!value || (Array.isArray(value) && value.length === 0)) return null;
+
+                                    return (
+                                        <div key={key}>
+                                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                                <span>✨</span> {key.replace(/([A-Z])/g, ' $1').trim()}
+                                            </h4>
+                                            <div className="bg-slate-950/40 p-5 rounded-xl border border-slate-800">
+                                                {Array.isArray(value) ? (
+                                                    <ul className="space-y-2">
+                                                        {value.map((item, idx) => (
+                                                            <li key={idx} className="text-slate-300 text-xs font-serif flex items-start gap-2"><span className="text-purple-500 mt-0.5">▹</span> {item}</li>
+                                                        ))}
+                                                    </ul>
+                                                ) : (
+                                                    <p className="text-slate-300 text-sm font-serif leading-relaxed">{String(value)}</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+
                             </div>
                         ) : (
 
@@ -395,7 +438,6 @@ const AdminSettings = () => {
                                         <p className="text-slate-400 text-xs font-mono">Changes here will alter how ACE evaluates all future jobs.</p>
                                     </div>
 
-                                    {/* ---> NEW BOXED ABORT BUTTON <--- */}
                                     <button
                                         onClick={handleAbort}
                                         className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-sm flex items-center gap-2 group"
@@ -496,9 +538,48 @@ const AdminSettings = () => {
                                                 ))}
                                             </div>
                                         </div>
+
+                                        {/* ---> NEW: DYNAMIC SECTIONS GENERATOR (EDIT MODE) <--- */}
+                                        {Object.entries(resumeData).map(([key, value]) => {
+                                            const standardKeys = ['fullName', 'profileSummary', 'coreSkills', 'certifications', 'workExperience', 'projects', 'education'];
+                                            if (standardKeys.includes(key)) return null;
+
+                                            return (
+                                                <div key={key}>
+                                                    <div className="flex justify-between items-center mb-4 border-b border-slate-800 pb-2">
+                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                            {key.replace(/([A-Z])/g, ' $1').trim()}
+                                                        </label>
+                                                        <button
+                                                            type="button"
+                                                            disabled={isUploading}
+                                                            onClick={() => {
+                                                                const newData = { ...resumeData };
+                                                                delete newData[key];
+                                                                setResumeData(newData);
+                                                            }}
+                                                            className="text-[10px] bg-red-500/10 text-red-400 px-3 py-1 rounded-full border border-red-500/20 hover:bg-red-500/30 transition-all disabled:opacity-50"
+                                                        >
+                                                            🗑️ Remove Section
+                                                        </button>
+                                                    </div>
+                                                    <textarea
+                                                        placeholder="Enter items separated by new lines..."
+                                                        value={Array.isArray(value) ? value.join('\n') : value}
+                                                        disabled={isUploading}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            setResumeData({ ...resumeData, [key]: Array.isArray(value) ? val.split('\n') : val });
+                                                        }}
+                                                        className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-400 custom-scrollbar disabled:opacity-50"
+                                                        rows="4"
+                                                    />
+                                                </div>
+                                            );
+                                        })}
+
                                     </div>
 
-                                    {/* ---> NEW BOXED BOTTOM BUTTONS <--- */}
                                     <div className="pt-8 flex justify-between items-center border-t border-slate-800">
                                         <button
                                             type="button"
