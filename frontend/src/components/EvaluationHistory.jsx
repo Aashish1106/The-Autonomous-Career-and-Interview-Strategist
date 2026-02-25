@@ -317,7 +317,7 @@ const EvaluationHistory = () => {
                                     <span>⚠️</span> Legacy Schema Detected
                                 </h4>
                                 <p className="text-slate-300 text-sm font-serif mb-6">
-                                    This archive is missing {missingFields.length} data point{missingFields.length > 1 ? 's' : ''} required by the modern Jarvis architecture. Please backfill the missing information below to unlock all features.
+                                    This archive is missing {missingFields.length} data point{missingFields.length > 1 ? 's' : ''} required by the modern ACE architecture. Please backfill the missing information below to unlock all features.
                                 </p>
 
                                 <div className="space-y-4 mb-6">
@@ -383,7 +383,7 @@ const EvaluationHistory = () => {
                             selectedJob.matchScore >= 60 ? 'bg-yellow-950/20 text-yellow-400 border-yellow-500/50' :
                                 'bg-pink-950/20 text-pink-500 border-pink-500/50'
                             }`}>
-                            <span className="text-[10px] font-black opacity-70 tracking-[0.3em] uppercase">Jarvis Historical Verdict</span>
+                            <span className="text-[10px] font-black opacity-70 tracking-[0.3em] uppercase">ACE Historical Verdict</span>
                             <span className="text-sm font-serif text-slate-300 mt-1 max-w-2xl text-center">"{evalData.action}"</span>
                         </div>
                     )}
@@ -413,7 +413,7 @@ const EvaluationHistory = () => {
                                                 return (
                                                     <div key={vIndex} className={`p-4 rounded-xl border relative transition-all duration-300 group/copy ${isBest ? 'bg-emerald-950/20 border-emerald-500/50 shadow-[inset_0_0_15px_rgba(16,185,129,0.05)]' : 'bg-slate-800/30 border-slate-700/50 hover:bg-slate-800/50'}`}>
                                                         {isBest && (
-                                                            <div className="absolute -top-3 -right-2 bg-emerald-500 text-slate-950 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-[0_0_10px_rgba(16,185,129,0.5)] z-10">Jarvis Top Pick ⭐</div>
+                                                            <div className="absolute -top-3 -right-2 bg-emerald-500 text-slate-950 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-[0_0_10px_rgba(16,185,129,0.5)] z-10">ACE Top Pick ⭐</div>
                                                         )}
                                                         <div className="flex justify-between items-start mb-2">
                                                             <div className={`text-[10px] font-bold uppercase tracking-wider ${isBest ? 'text-emerald-400' : 'text-slate-500'}`}>
@@ -439,9 +439,9 @@ const EvaluationHistory = () => {
                                         </div>
                                         <div className="mt-6 pt-5 border-t border-slate-800/60">
                                             <span className="text-[10px] font-black tracking-widest text-purple-400 uppercase mb-2 flex items-center gap-2">
-                                                <span>🧠</span> Why Jarvis chose Option {suggestion.best_variation_index + 1}
+                                                <span>🧠</span> Why ACE chose Option {suggestion.best_variation_index + 1}
                                             </span>
-                                            <p className="text-slate-300 text-sm leading-relaxed italic border-l-2 border-purple-500/50 pl-4">{suggestion.jarvis_reasoning}</p>
+                                            <p className="text-slate-300 text-sm leading-relaxed italic border-l-2 border-purple-500/50 pl-4">{suggestion.ACE_reasoning}</p>
                                         </div>
                                     </div>
                                 ))}

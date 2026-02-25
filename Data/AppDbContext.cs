@@ -25,7 +25,11 @@ namespace AutoJobStrategist.Api.Data
                     Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
                     FullName = "Admin User",
                     BaseResumeText = "Awaiting deployment initialization. Please paste your complete resume via the Admin Settings dashboard to initialize the agentic vector space.",
-                    CoreSkills = new[] { "Setup Required" }
+                    CoreSkills = new[] { "Setup Required" },
+
+                    // ---> Explicitly set static values to prevent EF Core timestamp panic <---
+                    DailyTokensBurned = 0,
+                    LastTokenReset = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
                 }
             );
         }

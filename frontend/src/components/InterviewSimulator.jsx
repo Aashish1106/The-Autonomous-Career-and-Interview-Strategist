@@ -18,7 +18,7 @@ const InterviewSimulator = ({ job, onClose }) => {
     const [evaluations, setEvaluations] = useState([]);
     const [timeLeft, setTimeLeft] = useState(120);
     const [isListening, setIsListening] = useState(false);
-    const [jarvisSpeaking, setJarvisSpeaking] = useState(false);
+    const [ACESpeaking, setACESpeaking] = useState(false);
     const [isPromptCopied, setIsPromptCopied] = useState(false);
 
     // --- REFS ---
@@ -110,9 +110,9 @@ const InterviewSimulator = ({ job, onClose }) => {
             utterance.voice = voices.find(v => v.name.includes('Google UK English Male') || v.name.includes('Great Britain')) || voices[0];
             utterance.rate = 1.05;
 
-            utterance.onstart = () => setJarvisSpeaking(true);
+            utterance.onstart = () => setACESpeaking(true);
             utterance.onend = () => {
-                setJarvisSpeaking(false);
+                setACESpeaking(false);
                 startTimer();
             };
             synthRef.current.speak(utterance);
@@ -201,7 +201,7 @@ const InterviewSimulator = ({ job, onClose }) => {
             setEvaluations(prev => [...prev, enrichedResult]);
         } catch (err) {
             console.error(err);
-            setError("Jarvis failed to evaluate the answer.");
+            setError("ACE failed to evaluate the answer.");
         } finally {
             setIsEvaluating(false);
         }
@@ -236,7 +236,7 @@ const InterviewSimulator = ({ job, onClose }) => {
         const doc = new jsPDF();
         doc.setFont("times", "bold");
         doc.setFontSize(16);
-        doc.text("Jarvis Technical Screen Report", 20, 20);
+        doc.text("ACE Technical Screen Report", 20, 20);
 
         const avgScore = Math.round(evaluations.reduce((acc, curr) => acc + curr.score, 0) / evaluations.length);
         doc.setFontSize(12);
@@ -258,13 +258,13 @@ const InterviewSimulator = ({ job, onClose }) => {
             yPos += 15;
 
             doc.setTextColor(100, 100, 100);
-            doc.text(`Jarvis Feedback (${evalObj.score}%): ${doc.splitTextToSize(evalObj.feedback, 170)}`, 20, yPos);
+            doc.text(`ACE Feedback (${evalObj.score}%): ${doc.splitTextToSize(evalObj.feedback, 170)}`, 20, yPos);
             yPos += 15;
             doc.setTextColor(0, 0, 0);
             yPos += 5;
         });
 
-        doc.save(`Jarvis_Interview_${job.companyName.replace(/\s+/g, '_')}.pdf`);
+        doc.save(`ACE_Interview_${job.companyName.replace(/\s+/g, '_')}.pdf`);
     };
 
     const generateResourceLink = (platform, query) => {
@@ -287,7 +287,7 @@ const InterviewSimulator = ({ job, onClose }) => {
     };
 
     const copyHandoffPrompt = () => {
-        const prompt = `You are Jarvis, an elite Principal Engineer conducting a rigorous technical job interview. I am applying for this role:\n${job.jobDescription}\n\nGenerate 10 highly specific, scenario-based technical questions cross-referencing my skills with this job. Do not ask behavioral questions. Give me one question at a time, wait for my answer, and then brutally grade it out of 100 before giving me the next question. Start with Question 1 now.`;
+        const prompt = `You are ACE, an elite Principal Engineer conducting a rigorous technical job interview. I am applying for this role:\n${job.jobDescription}\n\nGenerate 10 highly specific, scenario-based technical questions cross-referencing my skills with this job. Do not ask behavioral questions. Give me one question at a time, wait for my answer, and then brutally grade it out of 100 before giving me the next question. Start with Question 1 now.`;
         navigator.clipboard.writeText(prompt);
         window.open('https://gemini.google.com', '_blank');
     };
@@ -303,7 +303,7 @@ const InterviewSimulator = ({ job, onClose }) => {
                     </div>
                     <h2 className="text-2xl font-black text-white uppercase tracking-widest mb-4">Training Record Found</h2>
                     <p className="text-slate-400 font-serif leading-relaxed mb-8">
-                        Jarvis has a previous mock interview session logged for this specific role. Would you like to review your past performance report, or initialize a new 10-question gauntlet?
+                        ACE has a previous mock interview session logged for this specific role. Would you like to review your past performance report, or initialize a new 10-question gauntlet?
                     </p>
                     <div className="flex flex-col gap-4">
                         <button onClick={handleViewPastSession} className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(59,130,246,0.2)] hover:-translate-y-0.5">
@@ -358,7 +358,7 @@ const InterviewSimulator = ({ job, onClose }) => {
                     </div>
                     <h3 className="text-2xl font-black text-amber-400 uppercase tracking-widest mb-4">Rate Limit Reached</h3>
                     <p className="text-slate-300 font-serif leading-relaxed mb-8">
-                        Jarvis local token reserves are depleted. To bypass this restriction and continue your technical screen, initiate the Gemini Handoff Protocol.
+                        ACE local token reserves are depleted. To bypass this restriction and continue your technical screen, initiate the Gemini Handoff Protocol.
                     </p>
 
                     <div className="bg-slate-900 border border-slate-700 p-6 rounded-xl text-left mb-8 shadow-inner relative group">
@@ -371,7 +371,7 @@ const InterviewSimulator = ({ job, onClose }) => {
                                 {isPromptCopied ? '✅ COPIED' : '📋 COPY TEXT'}
                             </button>
                         </div>
-                        <p className="text-slate-400 text-xs font-mono line-clamp-3 italic">"You are Jarvis, an elite Principal Engineer conducting a rigorous technical job interview. I am applying for this role..."</p>
+                        <p className="text-slate-400 text-xs font-mono line-clamp-3 italic">"You are ACE, an elite Principal Engineer conducting a rigorous technical job interview. I am applying for this role..."</p>
                     </div>
 
                     <div className="flex gap-4">
@@ -458,7 +458,7 @@ const InterviewSimulator = ({ job, onClose }) => {
                 </div>
 
                 <div className="p-8 overflow-y-auto custom-scrollbar relative">
-                    {jarvisSpeaking && (
+                    {ACESpeaking && (
                         <div className="absolute top-8 right-8 flex gap-1 items-end h-6">
                             <div className="w-1 bg-purple-500 animate-[bounce_1s_infinite] h-full"></div>
                             <div className="w-1 bg-purple-500 animate-[bounce_1s_infinite_0.2s] h-2/3"></div>
@@ -476,13 +476,13 @@ const InterviewSimulator = ({ job, onClose }) => {
                                 <textarea
                                     value={userAnswer}
                                     onChange={(e) => setUserAnswer(e.target.value)}
-                                    placeholder={jarvisSpeaking ? "Listen to Jarvis..." : "Type your technical answer here, or click the mic to speak..."}
-                                    disabled={jarvisSpeaking}
+                                    placeholder={ACESpeaking ? "Listen to ACE..." : "Type your technical answer here, or click the mic to speak..."}
+                                    disabled={ACESpeaking}
                                     className="w-full h-48 bg-slate-950 border border-slate-700 rounded-xl p-5 text-slate-300 font-serif leading-relaxed focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none resize-none transition-all disabled:opacity-50"
                                 />
                                 <button
                                     onClick={toggleMic}
-                                    disabled={jarvisSpeaking}
+                                    disabled={ACESpeaking}
                                     className={`absolute bottom-4 right-4 w-10 h-10 rounded-full flex items-center justify-center transition-all ${isListening ? 'bg-red-500/20 border-red-500/50 text-red-400 animate-pulse' : 'bg-slate-800 border-slate-600 text-slate-400 hover:text-white hover:border-slate-500'} disabled:hidden`}
                                     title="Voice Dictation"
                                 >
@@ -494,10 +494,10 @@ const InterviewSimulator = ({ job, onClose }) => {
                                 <button
                                     id="submit-answer-btn"
                                     onClick={handleEvaluateAnswer}
-                                    disabled={(!userAnswer.trim() && timeLeft > 0) || isEvaluating || jarvisSpeaking}
+                                    disabled={(!userAnswer.trim() && timeLeft > 0) || isEvaluating || ACESpeaking}
                                     className="bg-purple-600 hover:bg-purple-500 text-white px-8 py-3 rounded-xl font-bold uppercase tracking-widest text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                                 >
-                                    {isEvaluating ? "Jarvis is Evaluating..." : "Submit Answer"}
+                                    {isEvaluating ? "ACE is Evaluating..." : "Submit Answer"}
                                 </button>
                             </div>
                         </div>

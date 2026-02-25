@@ -69,10 +69,10 @@ function App() {
             <div className="max-w-3xl mx-auto text-center mb-12 animate-in slide-in-from-top-4 fade-in duration-700">
                 <div className="inline-flex items-center justify-center px-4 py-1.5 mb-6 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 text-sm font-semibold uppercase tracking-widest shadow-[0_0_15px_rgba(168,85,247,0.15)]">
                     <span className="w-2 h-2 rounded-full bg-purple-500 mr-2 animate-pulse"></span>
-                    Jarvis Agentic Pipeline
+                    A JARVIS Agentic Pipeline
                 </div>
                 <h1 className="text-5xl font-black mb-4 tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">
-                    Autonomous Career Strategist
+                    Autonomous Career Expert
                 </h1>
                 <p className="text-slate-400 font-medium text-lg">
                     Semantic evaluation against your cloud-synced Postgres vector profile.
@@ -185,9 +185,9 @@ function App() {
 
                                                 {/* The Two Distinct Data Pods */}
                                                 <div className="flex gap-3 w-full md:w-auto relative z-10 pl-2 md:pl-0 mt-2 md:mt-0">
-                                                    {/* LLM Vibes / Jarvis Score (Gray/Purple Pod) */}
+                                                    {/* LLM Vibes / ACE Score (Gray/Purple Pod) */}
                                                     <div className="bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-2 text-center min-w-[100px] shadow-inner">
-                                                        <div className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">Jarvis Score</div>
+                                                        <div className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">ACE Score</div>
                                                         <div className="text-slate-300 font-black text-xl">{match.llmMatchScore}%</div>
                                                     </div>
 

@@ -61,7 +61,7 @@ const AdminSettings = () => {
         return `${proj.name}\nTechnologies: ${stack}\n${proj.description}`;
     };
 
-    // --- FETCH EXISTING PROFILE ON LOAD ---
+    // --- 1. FETCH EXISTING PROFILE ON LOAD (Run Once) ---
     useEffect(() => {
         const fetchProfile = async () => {
             try {
@@ -82,7 +82,25 @@ const AdminSettings = () => {
             }
         };
         fetchProfile();
-    }, []);
+    }, []); // <--- EMPTY ARRAY: Only runs when the component first loads
+
+    // --- 2. FETCH BOT CONFIG (Run dynamically) ---
+    useEffect(() => {
+        if (activeTab === 'automation') {
+            const fetchBotConfig = async () => {
+                try {
+                    const response = await fetch("https://localhost:7155/api/JobStrategist/bot-config");
+                    if (response.ok) {
+                        const data = await response.json();
+                        setBotConfig(data);
+                    }
+                } catch (error) {
+                    console.error("Failed to fetch bot config", error);
+                }
+            };
+            fetchBotConfig();
+        }
+    }, [activeTab]); // <--- DEPENDENCY ARRAY: Runs when the tab changes
 
     // --- TELEMETRY LOGIC ---
     const fetchTelemetry = async () => {
@@ -186,9 +204,25 @@ const AdminSettings = () => {
         }
     };
 
-    const handleSaveBotConfig = (e) => {
+    const handleSaveBotConfig = async (e) => {
         e.preventDefault();
-        showToast("🤖 Automation Protocols Locked");
+
+        try {
+            const response = await fetch("https://localhost:7155/api/JobStrategist/bot-config", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(botConfig)
+            });
+
+            if (response.ok) {
+                showToast("🤖 Automation Protocols Locked");
+            } else {
+                showToast("🚨 Failed to save config");
+            }
+        } catch (error) {
+            console.error("Error saving bot config:", error);
+            showToast("🚨 Server Connection Error");
+        }
     };
 
     return (
@@ -206,7 +240,7 @@ const AdminSettings = () => {
                 <span className="text-4xl">⚙️</span>
                 <div>
                     <h2 className="text-3xl font-black text-white uppercase tracking-wider">Command Center</h2>
-                    <p className="text-slate-400 font-mono text-xs mt-1">Configure Jarvis underlying architecture and automation protocols.</p>
+                    <p className="text-slate-400 font-mono text-xs mt-1">Configure ACE underlying architecture and automation protocols.</p>
                 </div>
             </div>
 
@@ -358,7 +392,7 @@ const AdminSettings = () => {
                                 <div className="flex justify-between items-center mb-8 border-b border-slate-800 pb-4">
                                     <div>
                                         <h3 className="text-xl font-bold text-white">Update Neural Identity</h3>
-                                        <p className="text-slate-400 text-xs font-mono">Changes here will alter how Jarvis evaluates all future jobs.</p>
+                                        <p className="text-slate-400 text-xs font-mono">Changes here will alter how ACE evaluates all future jobs.</p>
                                     </div>
 
                                     {/* ---> NEW BOXED ABORT BUTTON <--- */}

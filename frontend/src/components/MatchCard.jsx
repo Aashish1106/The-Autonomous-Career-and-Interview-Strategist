@@ -100,7 +100,7 @@ const MatchCard = () => {
                 const errorText = await response.text();
                 // ---> UNIVERSAL 429 HANDLER <---
                 if (response.status === 429) {
-                    throw new Error("⚠️ Jarvis Core: AI Token quota exhausted. Please rest and resume tomorrow.");
+                    throw new Error("⚠️ ACE Core: AI Token quota exhausted. Please rest and resume tomorrow.");
                 }
                 throw new Error(errorText || "Unknown backend error");
             }
@@ -186,7 +186,7 @@ const MatchCard = () => {
                 const errorText = await response.text();
                 // ---> UNIVERSAL 429 HANDLER <---
                 if (response.status === 429) {
-                    throw new Error("⚠️ Jarvis Core: AI Token quota exhausted. Please rest and resume tomorrow.");
+                    throw new Error("⚠️ ACE Core: AI Token quota exhausted. Please rest and resume tomorrow.");
                 }
                 throw new Error(`Tailoring API Failed (${response.status}):\n${errorText || "Unknown backend error"}`);
             }
@@ -229,7 +229,7 @@ const MatchCard = () => {
                 const errorText = await response.text();
                 // ---> UNIVERSAL 429 HANDLER <---
                 if (response.status === 429) {
-                    throw new Error("⚠️ Jarvis Core: AI Token quota exhausted. Please rest and resume tomorrow.");
+                    throw new Error("⚠️ ACE Core: AI Token quota exhausted. Please rest and resume tomorrow.");
                 }
                 throw new Error(`Cover Letter API Failed (${response.status}):\n${errorText || "Unknown backend error"}`);
             }
@@ -317,7 +317,7 @@ const MatchCard = () => {
                         {screenshot && (
                             <div className="relative group rounded-xl overflow-hidden border border-slate-700 shadow-[0_0_15px_rgba(0,0,0,0.5)] mb-4 animate-in fade-in slide-in-from-top-4 duration-700">
                                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/20 to-transparent z-10 pointer-events-none"></div>
-                                <img src={`data:image/jpeg;base64,${screenshot}`} alt="Jarvis Target Lock" className="w-full h-48 object-cover object-top opacity-70 group-hover:opacity-100 transition-opacity duration-500" />
+                                <img src={`data:image/jpeg;base64,${screenshot}`} alt="ACE Target Lock" className="w-full h-48 object-cover object-top opacity-70 group-hover:opacity-100 transition-opacity duration-500" />
                                 <div className="absolute bottom-3 left-4 z-20 flex items-center gap-2">
                                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-[pulse_1s_ease-in-out_infinite] shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
                                     <span className="text-xs font-mono text-emerald-400 font-bold uppercase tracking-widest drop-shadow-md">Target Acquired // Visual Receipt</span>
@@ -404,7 +404,7 @@ const MatchCard = () => {
                                 evaluation.matchScore >= 60 ? 'bg-yellow-950/20 text-yellow-400 border-yellow-500/50' :
                                     'bg-pink-950/20 text-pink-500 border-pink-500/50 shadow-[0_0_20px_rgba(236,72,153,0.05)]'
                                 }`}>
-                                <span className="text-[10px] font-black opacity-70 tracking-[0.3em] uppercase">Jarvis Final Verdict</span>
+                                <span className="text-[10px] font-black opacity-70 tracking-[0.3em] uppercase">ACE Final Verdict</span>
                                 <span className="text-lg font-black uppercase tracking-widest drop-shadow-md">
                                     {evaluation.matchScore >= 80 ? '🟢 High Match: Proceed to Apply' :
                                         evaluation.matchScore >= 60 ? '🟡 Moderate Match: Tailor Heavily' :
@@ -422,7 +422,7 @@ const MatchCard = () => {
                                 <span className="text-amber-400 text-2xl mt-1 animate-pulse">💡</span>
                                 <div>
                                     <h4 className="text-amber-400 font-bold text-[11px] uppercase tracking-widest mb-1.5 flex items-center gap-2">
-                                        Jarvis Strategic Override
+                                        ACE Strategic Override
                                         <span className="bg-amber-500/20 text-amber-300 text-[9px] px-2 py-0.5 rounded-full border border-amber-500/30">Action Paused</span>
                                     </h4>
                                     <p className="text-amber-200/80 text-sm font-serif leading-relaxed">{coachFeedback}</p>
@@ -440,7 +440,7 @@ const MatchCard = () => {
                                         setUserInstruction(e.target.value);
                                         if (coachFeedback) setCoachFeedback(null);
                                     }}
-                                    placeholder="Optional: Provide custom instructions for Jarvis (e.g., 'Focus heavily on my .NET architecture skills')..."
+                                    placeholder="Optional: Provide custom instructions for ACE (e.g., 'Focus heavily on my .NET architecture skills')..."
                                     className="w-full bg-transparent text-slate-300 outline-none text-sm placeholder-slate-600 font-mono"
                                 />
                             </div>
@@ -526,7 +526,7 @@ const MatchCard = () => {
                                                     return (
                                                         <div key={vIndex} className={`p-4 rounded-xl border relative transition-all duration-300 group/copy ${isBest ? 'bg-emerald-950/20 border-emerald-500/50 shadow-[inset_0_0_15px_rgba(16,185,129,0.05)]' : 'bg-slate-800/30 border-slate-700/50 hover:bg-slate-800/50'}`}>
                                                             {isBest && (
-                                                                <div className="absolute -top-3 -right-2 bg-emerald-500 text-slate-950 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-[0_0_10px_rgba(16,185,129,0.5)] z-10">Jarvis Top Pick ⭐</div>
+                                                                <div className="absolute -top-3 -right-2 bg-emerald-500 text-slate-950 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-[0_0_10px_rgba(16,185,129,0.5)] z-10">ACE Top Pick ⭐</div>
                                                             )}
                                                             <div className="flex justify-between items-start mb-2">
                                                                 <div className={`text-[10px] font-bold uppercase tracking-wider ${isBest ? 'text-emerald-400' : 'text-slate-500'}`}>
@@ -552,9 +552,9 @@ const MatchCard = () => {
                                             </div>
                                             <div className="mt-6 pt-5 border-t border-slate-800/60">
                                                 <span className="text-[10px] font-black tracking-widest text-purple-400 uppercase mb-2 flex items-center gap-2">
-                                                    <span>🧠</span> Why Jarvis chose Option {suggestion.best_variation_index + 1}
+                                                    <span>🧠</span> Why ACE chose Option {suggestion.best_variation_index + 1}
                                                 </span>
-                                                <p className="text-slate-300 text-sm leading-relaxed italic border-l-2 border-purple-500/50 pl-4">{suggestion.jarvis_reasoning}</p>
+                                                <p className="text-slate-300 text-sm leading-relaxed italic border-l-2 border-purple-500/50 pl-4">{suggestion.ACE_reasoning}</p>
                                             </div>
                                         </div>
                                     ))}
@@ -584,7 +584,7 @@ const MatchCard = () => {
                 )}
             </div>
 
-            {/* ---> JARVIS TOAST NOTIFICATION HUD <--- */}
+            {/* ---> ACE TOAST NOTIFICATION HUD <--- */}
             {toastMessage && (
                 <div className="fixed bottom-8 right-8 z-[100] animate-in slide-in-from-bottom-8 fade-in duration-300">
                     <div className="bg-slate-900/90 backdrop-blur-xl border border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.2)] text-emerald-400 px-6 py-4 rounded-xl font-mono text-xs font-bold uppercase tracking-widest flex items-center gap-4">

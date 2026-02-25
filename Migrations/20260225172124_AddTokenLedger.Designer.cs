@@ -3,6 +3,7 @@ using System;
 using AutoJobStrategist.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Pgvector;
@@ -12,9 +13,11 @@ using Pgvector;
 namespace AutoJobStrategist.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260225172124_AddTokenLedger")]
+    partial class AddTokenLedger
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -121,30 +124,15 @@ namespace AutoJobStrategist.Api.Migrations
                         .IsRequired()
                         .HasColumnType("text[]");
 
-                    b.Property<int>("DailyApplicationLimit")
-                        .HasColumnType("integer");
-
                     b.Property<int>("DailyTokensBurned")
                         .HasColumnType("integer");
-
-                    b.Property<string>("EncryptedLinkedInEmail")
-                        .HasColumnType("text");
-
-                    b.Property<string>("EncryptedLinkedInPassword")
-                        .HasColumnType("text");
 
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<bool>("HeadlessMode")
-                        .HasColumnType("boolean");
-
                     b.Property<DateTime>("LastTokenReset")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("MatchThreshold")
-                        .HasColumnType("integer");
 
                     b.Property<Vector>("ResumeEmbedding")
                         .HasColumnType("vector(768)");
@@ -162,12 +150,9 @@ namespace AutoJobStrategist.Api.Migrations
                             Id = new Guid("11111111-1111-1111-1111-111111111111"),
                             BaseResumeText = "Awaiting deployment initialization. Please paste your complete resume via the Admin Settings dashboard to initialize the agentic vector space.",
                             CoreSkills = new[] { "Setup Required" },
-                            DailyApplicationLimit = 25,
                             DailyTokensBurned = 0,
                             FullName = "Admin User",
-                            HeadlessMode = true,
-                            LastTokenReset = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            MatchThreshold = 75
+                            LastTokenReset = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         });
                 });
 #pragma warning restore 612, 618

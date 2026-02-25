@@ -9,6 +9,7 @@ using Pgvector.EntityFrameworkCore;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using UglyToad.PdfPig;
+using System.Text.RegularExpressions;
 
 namespace AutoJobStrategist.Api.Controllers
 {
@@ -56,6 +57,59 @@ namespace AutoJobStrategist.Api.Controllers
                 .EnumerateArray()
                 .Select(e => e.GetSingle())
                 .ToArray();
+        }
+
+        // --->  THE TOKEN TOLLBOOTH <---
+        private async Task TrackTokenUsageAsync(FunctionResult result, string promptText)
+        {
+            try
+            {
+                var adminId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+                var profile = await _context.UserProfiles.FindAsync(adminId);
+                if (profile == null) return;
+
+                // 1. Check if it's a new day. If so, reset the ledger.
+                if (DateTime.UtcNow.Date > profile.LastTokenReset.Date)
+                {
+                    profile.DailyTokensBurned = 0;
+                    profile.LastTokenReset = DateTime.UtcNow;
+                }
+
+                // 2. Calculate Tokens
+                // Semantic Kernel's Gemini Connector doesn't always expose the Usage object cleanly in preview builds.
+                // As a bulletproof enterprise standard, we use the universally accepted LLM token estimation formula:
+                // 1 Token ≈ 4 Characters (English text).
+
+                string responseText = result.GetValue<string>() ?? "";
+                int promptTokens = promptText.Length / 4;
+                int completionTokens = responseText.Length / 4;
+                int totalTokens = promptTokens + completionTokens;
+
+                // 3. Update the Database
+                profile.DailyTokensBurned += totalTokens;
+
+                // Save silently without disrupting the main thread
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                // Never crash the main API response just because telemetry failed
+                Console.WriteLine($"Token tracking failed: {ex.Message}");
+            }
+        }
+
+        // ---> PDF TEXT SANITIZER <---
+        private string SanitizePdfText(string rawText)
+        {
+            if (string.IsNullOrWhiteSpace(rawText)) return string.Empty;
+
+            // 1. Strip out null bytes and unprintable PDF ghost characters
+            string cleaned = rawText.Replace("\0", " ");
+
+            // 2. Squash massive whitespace gaps (turns 50 blank lines into 1 space)
+            cleaned = Regex.Replace(cleaned, @"\s+", " ");
+
+            return cleaned.Trim();
         }
 
         // -------------------------------------------------------------------
@@ -129,46 +183,71 @@ namespace AutoJobStrategist.Api.Controllers
         // 3. POST: PDF Neural Extractor
         // -------------------------------------------------------------------
         [HttpPost("parse-pdf")]
-        public async Task<IActionResult> ParseResumePdf(IFormFile file)
+        public async Task<IActionResult> ParseResumePdf([FromForm] PdfUploadRequest request)
         {
+            // Map the file from the request
+            var file = request.File;
+
+            // 1. Strict File Format Validation
             if (file == null || file.Length == 0 || !file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
                 return BadRequest("Please upload a valid PDF file.");
 
             try
             {
-                var rawText = new System.Text.StringBuilder();
+                var rawTextBuilder = new System.Text.StringBuilder();
                 using (var stream = file.OpenReadStream())
-                using (var document = PdfDocument.Open(stream))
+                using (var document = UglyToad.PdfPig.PdfDocument.Open(stream))
                 {
                     foreach (var page in document.GetPages())
                     {
-                        rawText.Append(page.Text);
-                        rawText.Append(" ");
+                        rawTextBuilder.Append(page.Text);
+                        rawTextBuilder.Append(" ");
                     }
                 }
 
-                var promptTemplate = @"
-                You are Jarvis, an elite technical recruiter and data architect. Analyze the following raw resume text and extract the key information into a highly structured JSON format. 
-                
-                CRITICAL INSTRUCTIONS:
-                - Return ONLY valid JSON. Do not include markdown formatting (like ```json), and do not include conversational text.
-                - You must accurately extract the person's full name.
-                - Match this exact schema structure:
+                // ---> THE SAFEGUARD PROTOCOL <---
+                // Wash the text through the sanitizer to remove ghost characters
+                string extractedText = SanitizePdfText(rawTextBuilder.ToString());
+
+                // Safeguard 1: Image-only PDF block
+                if (string.IsNullOrWhiteSpace(extractedText))
                 {
-                  ""fullName"": ""string"",
-                  ""profileSummary"": ""string"",
-                  ""coreSkills"": [""string""],
-                  ""workExperience"": [{ ""company"": ""string"", ""role"": ""string"", ""duration"": ""string"", ""bullets"": [""string""] }],
-                  ""education"": [{ ""institution"": ""string"", ""degree"": ""string"", ""duration"": ""string"" }],
-                  ""projects"": [{ ""name"": ""string"", ""technologies"": [""string""], ""description"": ""string"" }],
-                  ""certifications"": [""string""]
+                    return BadRequest("Could not extract readable text. Ensure the PDF is not a scanned image.");
                 }
 
-                RAW TEXT:
-                {{$resumeText}}";
+                // Safeguard 2: The Token Bomb block (Prevents API crashes)
+                if (extractedText.Length > 30000)
+                {
+                    return BadRequest("PDF exceeds maximum allowed length. Please upload a standard resume under 10 pages.");
+                }
 
-                var arguments = new KernelArguments() { { "resumeText", rawText.ToString() } };
+                var promptTemplate = @"
+        You are ACE, an elite technical recruiter and data architect. Analyze the following raw resume text and extract the key information into a highly structured JSON format. 
+        
+        CRITICAL INSTRUCTIONS:
+        - Return ONLY valid JSON. Do not include markdown formatting (like ```json), and do not include conversational text.
+        - You must accurately extract the person's full name.
+        - Match this exact schema structure:
+        {
+          ""fullName"": ""string"",
+          ""profileSummary"": ""string"",
+          ""coreSkills"": [""string""],
+          ""workExperience"": [{ ""company"": ""string"", ""role"": ""string"", ""duration"": ""string"", ""bullets"": [""string""] }],
+          ""education"": [{ ""institution"": ""string"", ""degree"": ""string"", ""duration"": ""string"" }],
+          ""projects"": [{ ""name"": ""string"", ""technologies"": [""string""], ""description"": ""string"" }],
+          ""certifications"": [""string""]
+        }
+
+        RAW TEXT:
+        {{$resumeText}}";
+
+                // Pass the *sanitized* text to the AI
+                var arguments = new KernelArguments() { { "resumeText", extractedText } };
                 var result = await _kernel.InvokePromptAsync(promptTemplate, arguments);
+
+                // Log the exact token burn
+                await TrackTokenUsageAsync(result, promptTemplate);
+
                 var rawResponse = result.ToString();
 
                 var startIndex = rawResponse.IndexOf('{');
@@ -177,7 +256,7 @@ namespace AutoJobStrategist.Api.Controllers
                 if (startIndex != -1 && endIndex != -1)
                 {
                     var cleanJson = rawResponse.Substring(startIndex, endIndex - startIndex + 1);
-                    var parsedJson = JsonSerializer.Deserialize<JsonElement>(cleanJson);
+                    var parsedJson = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(cleanJson);
                     return Ok(parsedJson);
                 }
 
@@ -242,6 +321,7 @@ namespace AutoJobStrategist.Api.Controllers
                 };
 
                 var result = await _kernel.InvokePromptAsync(promptTemplate, arguments);
+                await TrackTokenUsageAsync(result, promptTemplate);
                 var rawResponse = result.ToString();
 
                 var startIndex = rawResponse.IndexOf('{');
@@ -283,7 +363,7 @@ namespace AutoJobStrategist.Api.Controllers
             {
                 if (ex.Message.Contains("429") || ex.Message.Contains("Too Many Requests") || ex.Message.Contains("quota"))
                 {
-                    return StatusCode(429, "API_EXHAUSTED: Jarvis token reserves are depleted for the day. Please try again tomorrow.");
+                    return StatusCode(429, "API_EXHAUSTED: ACE token reserves are depleted for the day. Please try again tomorrow.");
                 }
 
                 return StatusCode(500, $"Agent failure: {ex.Message}");
@@ -298,19 +378,57 @@ namespace AutoJobStrategist.Api.Controllers
         {
             try
             {
-                // Count records across your system
+                // Run the Micro-Ping to test Google's servers
+                var currentApiHealth = await CheckApiHealthAsync();
+
+                // Volume Metrics
                 var totalJobsScraped = await _context.JobApplications.CountAsync();
                 var totalJobsEmbedded = await _context.JobApplications.CountAsync(j => j.JobEmbedding != null);
                 var totalVaultRecords = await _context.EvaluationHistories.CountAsync();
                 var totalInterviews = await _context.EvaluationHistories.CountAsync(h => h.InterviewHistoryJson != null);
 
+                // Database Health
                 var dbConnected = await _context.Database.CanConnectAsync();
 
-                // ---> NEW: Token Ledger Logic <---
-                // In the future, we will read this directly from your UserProfile table
+                // ---> DYNAMIC VECTOR ENGINE CHECK <---
+                string vectorStatus = "Offline";
+                if (dbConnected)
+                {
+                    try
+                    {
+                        var conn = _context.Database.GetDbConnection();
+                        await conn.OpenAsync();
+                        using var cmd = conn.CreateCommand();
+                        cmd.CommandText = "SELECT 1 FROM pg_extension WHERE extname = 'vector'";
+                        var result = await cmd.ExecuteScalarAsync();
+
+                        if (result != null)
+                            vectorStatus = "pgvector (768-D): Active";
+                        else
+                            vectorStatus = "pgvector (768-D): Missing";
+
+                        await conn.CloseAsync();
+                    }
+                    catch
+                    {
+                        vectorStatus = "Query Failed";
+                    }
+                }
+
+                // Token Ledger Math
                 int dailyTokenBudget = 1000000; // Gemini Free Tier standard
-                int tokensBurnedToday = 145230; // Mock value until we hook up the Semantic Kernel interceptor
-                int tokensRemaining = dailyTokenBudget - tokensBurnedToday;
+                var profile = await _context.UserProfiles.FirstOrDefaultAsync(u => u.Id == Guid.Parse("11111111-1111-1111-1111-111111111111"));
+
+                // If the user hasn't made an API call yet today, we handle the reset logic on read as well
+                if (profile != null && DateTime.UtcNow.Date > profile.LastTokenReset.Date)
+                {
+                    profile.DailyTokensBurned = 0;
+                    profile.LastTokenReset = DateTime.UtcNow;
+                    await _context.SaveChangesAsync();
+                }
+
+                int tokensBurnedToday = profile?.DailyTokensBurned ?? 0;
+                int tokensRemaining = Math.Max(0, dailyTokenBudget - tokensBurnedToday);
 
                 // Calculate time until midnight (when quotas typically reset)
                 var timeUntilReset = DateTime.UtcNow.Date.AddDays(1) - DateTime.UtcNow;
@@ -319,8 +437,8 @@ namespace AutoJobStrategist.Api.Controllers
                 return Ok(new
                 {
                     status = dbConnected ? "Online" : "Offline",
-                    vectorEngine = "pgvector (768-D) Active",
-                    apiHealth = "Nominal",
+                    vectorEngine = vectorStatus,
+                    apiHealth = currentApiHealth,
                     lastPing = DateTime.UtcNow,
                     metrics = new
                     {
@@ -337,6 +455,25 @@ namespace AutoJobStrategist.Api.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, $"Telemetry failure: {ex.Message}");
+            }
+        }
+
+        // ---> THE API HEALTH MICRO-PING <---
+        private async Task<string> CheckApiHealthAsync()
+        {
+            try
+            {
+                // Send a 3-token heartbeat check to Google's servers
+                await _kernel.InvokePromptAsync("Ping. Reply OK.");
+                return "Nominal";
+            }
+            catch (Exception ex) when (ex.Message.Contains("429") || ex.Message.Contains("quota") || ex.Message.Contains("Too Many Requests"))
+            {
+                return "Rate Limited (429)";
+            }
+            catch (Exception)
+            {
+                return "API Outage (Offline)";
             }
         }
 
@@ -421,7 +558,7 @@ namespace AutoJobStrategist.Api.Controllers
                         ""original_bullet"": ""..."",
                         ""variations"": [ { ""focus"": ""..."", ""text"": ""..."" } ],
                         ""best_variation_index"": 0,
-                        ""jarvis_reasoning"": ""...""
+                        ""ACE_reasoning"": ""...""
                     }
                 ]
             }";
@@ -430,6 +567,7 @@ namespace AutoJobStrategist.Api.Controllers
             {
                 var arguments = new KernelArguments() { { "jobText", request.JobDescription }, { "resumeText", myResumeContext } };
                 var result = await _kernel.InvokePromptAsync(promptTemplate, arguments);
+                await TrackTokenUsageAsync(result, promptTemplate);
                 var rawResponse = result.ToString();
 
                 var startIndex = rawResponse.IndexOf('{');
@@ -470,6 +608,7 @@ namespace AutoJobStrategist.Api.Controllers
             try
             {
                 var result = await _kernel.InvokePromptAsync(prompt);
+                await TrackTokenUsageAsync(result, prompt);
                 var rawResponse = result.ToString();
                 var startIndex = rawResponse.IndexOf('{');
                 var endIndex = rawResponse.LastIndexOf('}');
@@ -506,7 +645,7 @@ namespace AutoJobStrategist.Api.Controllers
                 var initialText = await page.InnerTextAsync("body");
 
                 if (response?.Status == 403 || initialText.Contains("Access Denied") || initialText.Contains("Cloudflare"))
-                    return StatusCode(403, "WAF_BLOCKED: Jarvis encountered a firewall.");
+                    return StatusCode(403, "WAF_BLOCKED: ACE encountered a firewall.");
 
                 var finalCleanText = await page.InnerTextAsync("body");
                 var formattedText = System.Text.RegularExpressions.Regex.Replace(finalCleanText, @"\s+", " ").Trim();
@@ -538,6 +677,7 @@ namespace AutoJobStrategist.Api.Controllers
             {
                 var arguments = new KernelArguments() { { "jobText", request.JobDescription }, { "resumeText", myResumeContext } };
                 var result = await _kernel.InvokePromptAsync(promptTemplate, arguments);
+                await TrackTokenUsageAsync(result, promptTemplate);
                 var rawResponse = result.ToString();
 
                 var startIndex = rawResponse.IndexOf('{');
@@ -569,6 +709,7 @@ namespace AutoJobStrategist.Api.Controllers
             {
                 var arguments = new KernelArguments() { { "jobText", request.JobDescription }, { "questionText", request.QuestionText }, { "userAnswer", request.UserAnswer } };
                 var result = await _kernel.InvokePromptAsync(promptTemplate, arguments);
+                await TrackTokenUsageAsync(result, promptTemplate);
                 var rawResponse = result.ToString();
 
                 var startIndex = rawResponse.IndexOf('{');
@@ -677,11 +818,100 @@ namespace AutoJobStrategist.Api.Controllers
             await _context.SaveChangesAsync();
             return Ok(record);
         }
+
+        // -------------------------------------------------------------------
+        // AUTOMATION HUB: GET BOT CONFIG (Zero Trust & Masked Email)
+        // -------------------------------------------------------------------
+        [HttpGet("bot-config")]
+        public async Task<IActionResult> GetBotConfig()
+        {
+            try
+            {
+                var profile = await _context.UserProfiles.FirstOrDefaultAsync(u => u.Id == Guid.Parse("11111111-1111-1111-1111-111111111111"));
+                if (profile == null) return NotFound("Profile not found.");
+
+                string aesKey = _config["Security:AesMasterKey"];
+
+                // 1. Decrypt the email
+                string decryptedEmail = string.IsNullOrWhiteSpace(profile.EncryptedLinkedInEmail)
+                    ? ""
+                    : Utilities.EncryptionHelper.Decrypt(profile.EncryptedLinkedInEmail, aesKey);
+
+                // 2. Create the Email Mask (e.g., a****@example.com)
+                string emailMask = "";
+                if (!string.IsNullOrWhiteSpace(decryptedEmail))
+                {
+                    var parts = decryptedEmail.Split('@');
+                    if (parts.Length == 2 && parts[0].Length > 0)
+                    {
+                        emailMask = $"{parts[0][0]}****@{parts[1]}";
+                    }
+                    else
+                    {
+                        emailMask = "********"; // Fallback if it's a weirdly formatted string
+                    }
+                }
+
+                // 3. Password Mask
+                string passwordMask = string.IsNullOrWhiteSpace(profile.EncryptedLinkedInPassword) ? "" : "********";
+
+                return Ok(new
+                {
+                    linkedInEmail = emailMask, // <--- Send the mask, NOT the decrypted email
+                    linkedInPassword = passwordMask,
+                    dailyLimit = profile.DailyApplicationLimit,
+                    headlessMode = profile.HeadlessMode,
+                    matchThreshold = profile.MatchThreshold
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Failed to fetch bot config: {ex.Message}");
+            }
+        }
+
+        // -------------------------------------------------------------------
+        // AUTOMATION HUB: UPDATE BOT CONFIG (AES-256)
+        // -------------------------------------------------------------------
+        [HttpPut("bot-config")]
+        public async Task<IActionResult> UpdateBotConfig([FromBody] BotConfigRequest request)
+        {
+            try
+            {
+                var profile = await _context.UserProfiles.FirstOrDefaultAsync(u => u.Id == Guid.Parse("11111111-1111-1111-1111-111111111111"));
+                if (profile == null) return NotFound("Profile not found.");
+
+                string aesKey = _config["Security:AesMasterKey"];
+
+                // Encrypt Email
+                if (!string.IsNullOrWhiteSpace(request.LinkedInEmail))
+                    profile.EncryptedLinkedInEmail = Utilities.EncryptionHelper.Encrypt(request.LinkedInEmail, aesKey);
+
+                // Only encrypt and save the password if the user actually typed a new one. 
+                // If the payload says "********", they didn't change it, so ignore it!
+                if (!string.IsNullOrWhiteSpace(request.LinkedInPassword) && request.LinkedInPassword != "********")
+                {
+                    profile.EncryptedLinkedInPassword = Utilities.EncryptionHelper.Encrypt(request.LinkedInPassword, aesKey);
+                }
+
+                profile.DailyApplicationLimit = request.DailyLimit;
+                profile.HeadlessMode = request.HeadlessMode;
+                profile.MatchThreshold = request.MatchThreshold;
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new { message = "Automation protocols locked and heavily encrypted." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Encryption failed: {ex.Message}");
+            }
+        }
     }
 
     // ---> ENFORCED DATA CONTRACTS (DTOs) <---
 
-    // NEW: Added missing classes for the Job Evaluation output
+    // Added missing classes for the Job Evaluation output
     public class ApplicationWorkflowState
     {
         [JsonPropertyName("job_details")]
@@ -765,8 +995,8 @@ namespace AutoJobStrategist.Api.Controllers
         [JsonPropertyName("best_variation_index")]
         public int BestVariationIndex { get; set; }
 
-        [JsonPropertyName("jarvis_reasoning")]
-        public string JarvisReasoning { get; set; } = string.Empty;
+        [JsonPropertyName("ACE_reasoning")]
+        public string ACEReasoning { get; set; } = string.Empty;
     }
 
     public class VariationItem
@@ -878,5 +1108,13 @@ namespace AutoJobStrategist.Api.Controllers
         public string? JobUrl { get; set; }
         public string? CompanyName { get; set; }
         public string? RoleTitle { get; set; }
+    }
+    public class BotConfigRequest
+    {
+        public string? LinkedInEmail { get; set; }
+        public string? LinkedInPassword { get; set; }
+        public int DailyLimit { get; set; }
+        public bool HeadlessMode { get; set; }
+        public int MatchThreshold { get; set; }
     }
 }

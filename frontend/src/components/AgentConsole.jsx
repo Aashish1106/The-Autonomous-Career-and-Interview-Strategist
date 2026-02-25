@@ -17,7 +17,7 @@ const AgentConsole = ({ logs, mode, status }) => {
                 <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div>
                 <div className="w-2.5 h-2.5 rounded-full bg-yellow-500"></div>
                 <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
-                <span className="ml-2 text-[10px] text-slate-500 tracking-widest uppercase">Jarvis.exe // {mode}</span>
+                <span className="ml-2 text-[10px] text-slate-500 tracking-widest uppercase">ACE.exe // {mode}</span>
             </div>
 
             {/* The Text Stream */}

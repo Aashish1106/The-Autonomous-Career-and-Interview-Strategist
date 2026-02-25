@@ -18,8 +18,18 @@ namespace AutoJobStrategist.Api.Models
         // This will hold the mathematical representation of your resume
         [Column(TypeName = "vector(768)")]
         public Vector? ResumeEmbedding { get; set; }
-
         public string? StructuredResumeJson { get; set; }
+
+        // ---> THE TOKEN LEDGER <---
+        public int DailyTokensBurned { get; set; } = 0;
+        public DateTime LastTokenReset { get; set; } = DateTime.UtcNow;
+
+        // ---> AUTOMATION HUB PROTOCOLS <---
+        public string? EncryptedLinkedInEmail { get; set; } // AES-256 encryption  
+        public string? EncryptedLinkedInPassword { get; set; } // AES-256 encryption        public int DailyApplicationLimit { get; set; } = 25;
+        public int DailyApplicationLimit { get; set; } = 25;
+        public bool HeadlessMode { get; set; } = true;
+        public int MatchThreshold { get; set; } = 75;
     }
 
     public class JobApplication
@@ -43,5 +53,10 @@ namespace AutoJobStrategist.Api.Models
         // This will hold the mathematical representation of the job description
         [Column(TypeName = "vector(768)")]
         public Vector? JobEmbedding { get; set; }
+    }
+
+    public class PdfUploadRequest
+    {
+        public IFormFile? File { get; set; }
     }
 }
