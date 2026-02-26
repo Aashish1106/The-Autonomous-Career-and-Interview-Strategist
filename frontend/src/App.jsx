@@ -2,6 +2,7 @@
 import MatchCard from './components/MatchCard'
 import EvaluationHistory from './components/EvaluationHistory';
 import AdminSettings from './components/AdminSettings';
+import KanbanBoard from './components/KanbanBoard';
 
 function App() {
     const [topMatches, setTopMatches] = useState([]);
@@ -130,10 +131,32 @@ function App() {
                     {/* Tab Content Area */}
                     <div className="p-6 min-h-[300px]">
 
-                        {/* TAB 1: Evaluation History */}
+                        {/* ----------------------------------------------------------------- */}
+                        {/* TAB 1: EVALUATION HISTORY / STRATEGIC ACTION MATRIX */}
+                        {/* ----------------------------------------------------------------- */}
                         {activeTab === 'history' && (
-                            <div className="animate-in fade-in slide-in-from-left-4 duration-500">
-                                <EvaluationHistory />
+                            <div className="animate-in fade-in zoom-in-95 duration-300 h-full flex flex-col">
+                                <div className="flex justify-between items-start border-b border-slate-800 pb-6 mb-2">
+                                    <div>
+                                        <h3 className="text-3xl font-black text-white uppercase tracking-widest mb-2 flex items-center gap-3">
+                                            Strategic Action Matrix
+                                        </h3>
+                                        <div className="flex gap-2 text-xs font-mono">
+                                            <span className="bg-blue-500/10 text-blue-400 border border-blue-500/30 px-3 py-1 rounded-full">Live Pipeline</span>
+                                            <span className="bg-purple-500/10 text-purple-400 border border-purple-500/30 px-3 py-1 rounded-full">Auto-Sync Active</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Future home of the 'Re-Calibrate Scores' button */}
+                                    <button className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-sm">
+                                        Recalibrate Vectors
+                                    </button>
+                                </div>
+
+                                {/* ---> INJECT THE KANBAN BOARD HERE <--- */}
+                                <div className="flex-1 overflow-hidden">
+                                    <KanbanBoard />
+                                </div>
                             </div>
                         )}
 

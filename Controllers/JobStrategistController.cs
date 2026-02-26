@@ -916,6 +916,73 @@ namespace AutoJobStrategist.Api.Controllers
                 return StatusCode(500, $"Encryption failed: {ex.Message}");
             }
         }
+
+        // -------------------------------------------------------------------
+        // KANBAN PIPELINE: MOVE CARD
+        // -------------------------------------------------------------------
+        [HttpPut("evaluation/{id}/stage")]
+        public async Task<IActionResult> UpdatePipelineStage(Guid id, [FromBody] UpdateStageRequest request)
+        {
+            try
+            {
+                var evaluation = await _context.EvaluationHistories.FindAsync(id);
+                if (evaluation == null) return NotFound("Evaluation record not found.");
+
+                evaluation.PipelineStage = request.NewStage;
+
+                // If the bot (or you) moves it to Deployed, timestamp it.
+                if (request.NewStage == "Deployed" && evaluation.AppliedDate == null)
+                {
+                    evaluation.AppliedDate = DateTime.UtcNow;
+                }
+
+                if (!string.IsNullOrWhiteSpace(request.ErrorMessage))
+                {
+                    evaluation.BotErrorMessage = request.ErrorMessage;
+                }
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new { message = $"Card moved to {request.NewStage}" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Failed to move card: {ex.Message}");
+            }
+        }
+
+        // -------------------------------------------------------------------
+        // KANBAN PIPELINE: GET ALL JOBS
+        // -------------------------------------------------------------------
+        [HttpGet("evaluations")]
+        public async Task<IActionResult> GetEvaluations()
+        {
+            try
+            {
+                var evaluations = await _context.EvaluationHistories
+                    .OrderByDescending(e => e.CreatedAt)
+                    .Select(e => new {
+                        id = e.Id,
+                        companyName = e.CompanyName,
+                        roleTitle = e.RoleTitle,
+                        matchScore = e.MatchScore,
+                        pipelineStage = e.PipelineStage,
+                        appliedDate = e.AppliedDate,
+                        jobUrl = e.JobUrl,
+                        jobDescription = e.JobDescription,
+                        evaluationJson = e.EvaluationJson, // Holds Gaps & Recommendations
+                        tailoredResumeJson = e.TailoredResumeJson,
+                        coverLetterText = e.CoverLetterText
+                    })
+                    .ToListAsync();
+
+                return Ok(evaluations);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Failed to fetch evaluations: {ex.Message}");
+            }
+        }
     }
 
     // ---> ENFORCED DATA CONTRACTS (DTOs) <---
@@ -1031,6 +1098,11 @@ namespace AutoJobStrategist.Api.Controllers
         public string? TailoredResumeJson { get; set; }
         public string? CoverLetterText { get; set; }
         public string? InterviewHistoryJson { get; set; }
+
+        // ---> NEW: KANBAN PIPELINE TRACKING <---
+        public string PipelineStage { get; set; } = "Radar";
+        public DateTime? AppliedDate { get; set; }
+        public string? BotErrorMessage { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }
@@ -1125,5 +1197,12 @@ namespace AutoJobStrategist.Api.Controllers
         public int DailyLimit { get; set; }
         public bool HeadlessMode { get; set; }
         public int MatchThreshold { get; set; }
+    }
+
+    // ---> KANBAN PIPELINE DTO <---
+    public class UpdateStageRequest
+    {
+        public string NewStage { get; set; } = string.Empty;
+        public string? ErrorMessage { get; set; }
     }
 }

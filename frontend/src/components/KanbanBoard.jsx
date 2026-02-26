@@ -1,0 +1,170 @@
+import React, { useState, useEffect } from 'react';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import MatchCard from './MatchCard'; // ---> IMPORT YOUR MASTERPIECE <---
+
+const STAGES = ["Radar", "Queued", "Manual", "Deployed", "Interviewing", "Graveyard"];
+
+export default function KanbanBoard() {
+    const [jobs, setJobs] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [activeMenuId, setActiveMenuId] = useState(null);
+    const [selectedJob, setSelectedJob] = useState(null);
+
+    useEffect(() => {
+        const handleClickOutside = () => setActiveMenuId(null);
+        document.addEventListener('click', handleClickOutside);
+        return () => document.removeEventListener('click', handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+        fetchJobs();
+    }, []);
+
+    const fetchJobs = async () => {
+        try {
+            const res = await fetch("https://localhost:7155/api/JobStrategist/evaluations");
+            if (res.ok) {
+                const data = await res.json();
+                setJobs(Array.isArray(data) ? data : []);
+            }
+        } catch (error) {
+            console.error("Failed to load pipeline:", error);
+            setJobs([]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const onDragEnd = async (result) => {
+        setActiveMenuId(null);
+        const { destination, source, draggableId } = result;
+        if (!destination) return;
+        if (destination.droppableId === source.droppableId && destination.index === source.index) return;
+
+        const updatedJobs = Array.from(jobs);
+        const draggedJobIndex = updatedJobs.findIndex(j => String(j.id || j.Id) === String(draggableId));
+
+        if (draggedJobIndex > -1) {
+            const draggedJob = updatedJobs[draggedJobIndex];
+            draggedJob.pipelineStage = destination.droppableId;
+            setJobs(updatedJobs);
+
+            try {
+                await fetch(`https://localhost:7155/api/JobStrategist/evaluation/${draggableId}/stage`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ newStage: destination.droppableId })
+                });
+            } catch (error) {
+                console.error("Failed to sync stage:", error);
+            }
+        }
+    };
+
+    const toggleMenu = (e, id) => {
+        e.stopPropagation();
+        setActiveMenuId(activeMenuId === id ? null : id);
+    };
+
+    const openJobDetails = (e, job) => {
+        e.stopPropagation();
+        setActiveMenuId(null);
+        setSelectedJob(job);
+    };
+
+    const getScoreColor = (score) => {
+        if (score >= 85) return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
+        if (score >= 70) return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
+        return 'text-red-400 bg-red-500/10 border-red-500/30';
+    };
+
+    if (isLoading) return <div className="text-slate-400 animate-pulse text-center mt-20 font-mono">Loading Tactical Pipeline...</div>;
+
+    return (
+        <div className="flex h-full overflow-x-auto pb-8 custom-scrollbar gap-6 items-start mt-6 relative">
+            <DragDropContext onDragEnd={onDragEnd}>
+                {STAGES.map((stage) => {
+                    const safeJobs = Array.isArray(jobs) ? jobs : [];
+                    const columnJobs = safeJobs.filter(j => (j.pipelineStage || "Radar") === stage);
+
+                    return (
+                        <div key={stage} className="min-w-[320px] w-[320px] flex flex-col bg-slate-900/40 rounded-2xl border border-slate-800">
+                            <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950/50 rounded-t-2xl">
+                                <h3 className="text-slate-300 font-black uppercase text-[10px] tracking-widest">{stage}</h3>
+                                <span className="bg-slate-800 text-slate-400 text-[10px] px-2 py-0.5 rounded-full font-mono">{columnJobs.length}</span>
+                            </div>
+
+                            <Droppable droppableId={stage}>
+                                {(provided, snapshot) => (
+                                    <div ref={provided.innerRef} {...provided.droppableProps} className={`p-4 flex-1 min-h-[500px] transition-colors duration-300 ${snapshot.isDraggingOver ? 'bg-purple-900/10 rounded-b-2xl' : ''}`}>
+                                        {columnJobs.map((job, index) => {
+                                            const safeId = String(job.id || job.Id || `fallback-${index}`);
+                                            return (
+                                                <Draggable key={safeId} draggableId={safeId} index={index}>
+                                                    {(provided, snapshot) => (
+                                                        <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
+                                                            className={`relative mb-4 bg-slate-950 border rounded-xl p-4 transition-all duration-200 ease-out select-none
+                                                                ${snapshot.isDragging ? 'border-purple-500 scale-105 shadow-[0_25px_35px_-5px_rgba(168,85,247,0.4)] rotate-3 z-50 cursor-grabbing' : 'border-slate-800 hover:border-slate-700 hover:-translate-y-1 hover:shadow-[0_10px_15px_-3px_rgba(0,0,0,0.5)] cursor-grab'}`}>
+                                                            <div className="flex justify-between items-start mb-2">
+                                                                <div className={`px-2 py-1 rounded border text-[10px] font-black font-mono ${getScoreColor(job.matchScore || job.MatchScore)}`}>{job.matchScore || job.MatchScore}% MATCH</div>
+                                                                <button onClick={(e) => toggleMenu(e, safeId)} className="text-slate-500 hover:text-white transition-colors p-1 relative z-10">•••</button>
+                                                            </div>
+                                                            <h4 className="text-white font-bold text-sm leading-tight mb-1 pr-4">{job.roleTitle || job.RoleTitle}</h4>
+                                                            <p className="text-purple-400 text-xs font-mono">{job.companyName || job.CompanyName}</p>
+
+                                                            {activeMenuId === safeId && (
+                                                                <div className="absolute top-10 right-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl py-1 z-[100] animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
+                                                                    <button onClick={(e) => openJobDetails(e, job)} className="w-full text-left px-4 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                                                                        <span className="text-emerald-400">🔍</span> Open MatchCard
+                                                                    </button>
+                                                                    {job.jobUrl && (
+                                                                        <button onClick={() => window.open(job.jobUrl, '_blank')} className="w-full text-left px-4 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                                                                            <span className="text-slate-400">🔗</span> View Original Post
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </Draggable>
+                                            );
+                                        })}
+                                        {provided.placeholder}
+                                    </div>
+                                )}
+                            </Droppable>
+                        </div>
+                    );
+                })}
+            </DragDropContext>
+
+            {/* ----------------------------------------------------------------- */}
+            {/* ---> THE MODAL WRAPPER FOR MATCHCARD <--- */}
+            {/* ----------------------------------------------------------------- */}
+            {selectedJob && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 lg:p-8 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+                    <div
+                        /* ---> REMOVED overflow-y-auto, ADDED h-full and overflow-visible <--- */
+                        className="w-full max-w-5xl h-full max-h-[90vh] flex flex-col relative animate-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* A sleek close button floating outside the card */}
+                        <div className="absolute -top-4 -right-4 md:-right-12 z-[250]">
+                            <button
+                                onClick={() => setSelectedJob(null)}
+                                className="bg-slate-900 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-slate-700 hover:border-red-500/50 rounded-full w-10 h-10 flex items-center justify-center shadow-[0_0_15px_rgba(0,0,0,0.5)] transition-all"
+                                title="Close MatchCard"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* ---> INJECT MATCHCARD HERE <--- */}
+                        <MatchCard job={selectedJob} />
+
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
