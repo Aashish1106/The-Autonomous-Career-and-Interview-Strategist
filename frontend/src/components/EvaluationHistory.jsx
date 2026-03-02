@@ -43,7 +43,7 @@ const EvaluationHistory = () => {
     const fetchHistory = async () => {
         setIsLoading(true);
         try {
-            const response = await fetch("https://localhost:7155/api/JobStrategist/history");
+            const response = await fetch("https://jarvis-ace-api-hbepfjgzhmguhchv.southindia-01.azurewebsites.net/api/JobStrategist/history");
             if (!response.ok) throw new Error("Failed to fetch history");
             const data = await response.json();
             setHistoryList(data);
@@ -72,7 +72,7 @@ const EvaluationHistory = () => {
         setDeletingId(id);
 
         try {
-            const response = await fetch(`https://localhost:7155/api/JobStrategist/history/${id}`, {
+            const response = await fetch(`https://jarvis-ace-api-hbepfjgzhmguhchv.southindia-01.azurewebsites.net/api/JobStrategist/history/${id}`, {
                 method: "DELETE"
             });
             if (!response.ok) throw new Error("Failed to delete record");
@@ -109,7 +109,7 @@ const EvaluationHistory = () => {
                 payload[csharpKey] = value;
             }
 
-            const response = await fetch(`https://localhost:7155/api/JobStrategist/history/${selectedJob.id}/upgrade`, {
+            const response = await fetch(`https://jarvis-ace-api-hbepfjgzhmguhchv.southindia-01.azurewebsites.net/api/JobStrategist/history/${selectedJob.id}/upgrade`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)

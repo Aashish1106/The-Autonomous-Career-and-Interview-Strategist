@@ -22,7 +22,7 @@ export default function KanbanBoard() {
 
     const fetchJobs = async () => {
         try {
-            const res = await fetch("https://localhost:7155/api/JobStrategist/evaluations");
+            const res = await fetch("https://jarvis-ace-api-hbepfjgzhmguhchv.southindia-01.azurewebsites.net/api/JobStrategist/evaluations");
             if (res.ok) {
                 const data = await res.json();
                 setJobs(Array.isArray(data) ? data : []);
@@ -50,7 +50,7 @@ export default function KanbanBoard() {
             setJobs(updatedJobs);
 
             try {
-                await fetch(`https://localhost:7155/api/JobStrategist/evaluation/${draggableId}/stage`, {
+                await fetch(`https://jarvis-ace-api-hbepfjgzhmguhchv.southindia-01.azurewebsites.net/api/JobStrategist/evaluation/${draggableId}/stage`, {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ newStage: destination.droppableId })
@@ -73,9 +73,9 @@ export default function KanbanBoard() {
     };
 
     const getScoreColor = (score) => {
-        if (score >= 85) return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
-        if (score >= 70) return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
-        return 'text-red-400 bg-red-500/10 border-red-500/30';
+        if (score >= 85) return 'text-emerald-700 bg-emerald-100 border-emerald-300';
+        if (score >= 70) return 'text-amber-700 bg-amber-100 border-amber-300';
+        return 'text-rose-700 bg-rose-100 border-rose-300';
     };
 
     if (isLoading) return <div className="text-slate-400 animate-pulse text-center mt-20 font-mono">Loading Tactical Pipeline...</div>;
@@ -88,37 +88,40 @@ export default function KanbanBoard() {
                     const columnJobs = safeJobs.filter(j => (j.pipelineStage || "Radar") === stage);
 
                     return (
-                        <div key={stage} className="min-w-[320px] w-[320px] flex flex-col bg-slate-900/40 rounded-2xl border border-slate-800">
-                            <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950/50 rounded-t-2xl">
-                                <h3 className="text-slate-300 font-black uppercase text-[10px] tracking-widest">{stage}</h3>
-                                <span className="bg-slate-800 text-slate-400 text-[10px] px-2 py-0.5 rounded-full font-mono">{columnJobs.length}</span>
+                        <div key={stage} className="min-w-[320px] w-[320px] flex flex-col bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-sm">
+                            <div className="p-4 border-b border-violet-100/50 flex justify-between items-center bg-white/60 rounded-t-2xl shadow-sm">
+                                <h3 className="text-violet-900 font-black uppercase text-[10px] tracking-widest">{stage}</h3>
+                                <span className="bg-violet-100 text-violet-700 text-[10px] px-2 py-0.5 rounded-full font-mono">{columnJobs.length}</span>
                             </div>
 
                             <Droppable droppableId={stage}>
                                 {(provided, snapshot) => (
-                                    <div ref={provided.innerRef} {...provided.droppableProps} className={`p-4 flex-1 min-h-[500px] transition-colors duration-300 ${snapshot.isDraggingOver ? 'bg-purple-900/10 rounded-b-2xl' : ''}`}>
+                                    <div ref={provided.innerRef} {...provided.droppableProps} className={`p-4 flex-1 min-h-[500px] transition-colors duration-300 ${snapshot.isDraggingOver ? 'bg-violet-50/50 rounded-b-2xl' : ''}`}>
                                         {columnJobs.map((job, index) => {
                                             const safeId = String(job.id || job.Id || `fallback-${index}`);
                                             return (
                                                 <Draggable key={safeId} draggableId={safeId} index={index}>
                                                     {(provided, snapshot) => (
                                                         <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
-                                                            className={`relative mb-4 bg-slate-950 border rounded-xl p-4 transition-all duration-200 ease-out select-none
-                                                                ${snapshot.isDragging ? 'border-purple-500 scale-105 shadow-[0_25px_35px_-5px_rgba(168,85,247,0.4)] rotate-3 z-50 cursor-grabbing' : 'border-slate-800 hover:border-slate-700 hover:-translate-y-1 hover:shadow-[0_10px_15px_-3px_rgba(0,0,0,0.5)] cursor-grab'}`}>
+                                                            className={`relative mb-4 bg-white/90 backdrop-blur-sm border rounded-xl p-4 transition-all duration-200 ease-out select-none
+                                                                ${snapshot.isDragging
+                                                                    ? 'border-violet-400 scale-105 shadow-[0_25px_35px_-5px_rgba(139,92,246,0.25)] rotate-3 z-50 cursor-grabbing'
+                                                                    : 'border-violet-100 hover:border-violet-300 hover:-translate-y-1 hover:shadow-[0_10px_15px_-3px_rgba(139,92,246,0.1)] cursor-grab'
+                                                                }`}>
                                                             <div className="flex justify-between items-start mb-2">
                                                                 <div className={`px-2 py-1 rounded border text-[10px] font-black font-mono ${getScoreColor(job.matchScore || job.MatchScore)}`}>{job.matchScore || job.MatchScore}% MATCH</div>
-                                                                <button onClick={(e) => toggleMenu(e, safeId)} className="text-slate-500 hover:text-white transition-colors p-1 relative z-10">•••</button>
+                                                                <button onClick={(e) => toggleMenu(e, safeId)} className="text-slate-400 hover:text-violet-600 transition-colors p-1 relative z-10">•••</button>
                                                             </div>
-                                                            <h4 className="text-white font-bold text-sm leading-tight mb-1 pr-4">{job.roleTitle || job.RoleTitle}</h4>
-                                                            <p className="text-purple-400 text-xs font-mono">{job.companyName || job.CompanyName}</p>
+                                                            <h4 className="text-slate-800 font-bold text-sm leading-tight mb-1 pr-4">{job.roleTitle || job.RoleTitle}</h4>
+                                                            <p className="text-violet-600 text-xs font-mono">{job.companyName || job.CompanyName}</p>
 
                                                             {activeMenuId === safeId && (
-                                                                <div className="absolute top-10 right-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl py-1 z-[100] animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
-                                                                    <button onClick={(e) => openJobDetails(e, job)} className="w-full text-left px-4 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
-                                                                        <span className="text-emerald-400">🔍</span> Open MatchCard
+                                                                <div className="absolute top-10 right-2 w-48 bg-white border border-violet-100 rounded-lg shadow-xl py-1 z-[100] animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
+                                                                    <button onClick={(e) => openJobDetails(e, job)} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-700 flex items-center gap-3 transition-colors">
+                                                                        <span className="text-violet-500">🔍</span> Open MatchCard
                                                                     </button>
                                                                     {job.jobUrl && (
-                                                                        <button onClick={() => window.open(job.jobUrl, '_blank')} className="w-full text-left px-4 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-3 transition-colors">
+                                                                        <button onClick={() => window.open(job.jobUrl, '_blank')} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-700 flex items-center gap-3 transition-colors">
                                                                             <span className="text-slate-400">🔗</span> View Original Post
                                                                         </button>
                                                                     )}
@@ -142,9 +145,8 @@ export default function KanbanBoard() {
             {/* ---> THE MODAL WRAPPER FOR MATCHCARD <--- */}
             {/* ----------------------------------------------------------------- */}
             {selectedJob && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 lg:p-8 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 lg:p-8 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-200">
                     <div
-                        /* ---> REMOVED overflow-y-auto, ADDED h-full and overflow-visible <--- */
                         className="w-full max-w-5xl h-full max-h-[90vh] flex flex-col relative animate-in zoom-in-95 duration-200"
                         onClick={(e) => e.stopPropagation()}
                     >
@@ -152,7 +154,7 @@ export default function KanbanBoard() {
                         <div className="absolute -top-4 -right-4 md:-right-12 z-[250]">
                             <button
                                 onClick={() => setSelectedJob(null)}
-                                className="bg-slate-900 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-slate-700 hover:border-red-500/50 rounded-full w-10 h-10 flex items-center justify-center shadow-[0_0_15px_rgba(0,0,0,0.5)] transition-all"
+                                className="bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-500 border border-violet-100 hover:border-rose-200 rounded-full w-10 h-10 flex items-center justify-center shadow-lg transition-all"
                                 title="Close MatchCard"
                             >
                                 ✕

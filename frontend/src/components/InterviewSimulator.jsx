@@ -48,7 +48,7 @@ const InterviewSimulator = ({ job, onClose }) => {
 
     const generateQuestions = async () => {
         try {
-            const response = await fetch("https://localhost:7155/api/JobStrategist/generate-interview-questions", {
+            const response = await fetch("https://jarvis-ace-api-hbepfjgzhmguhchv.southindia-01.azurewebsites.net/api/JobStrategist/generate-interview-questions", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ JobDescription: job.jobDescription })
@@ -179,7 +179,7 @@ const InterviewSimulator = ({ job, onClose }) => {
         const currentQuestion = questions[currentStep - 1];
 
         try {
-            const response = await fetch("https://localhost:7155/api/JobStrategist/evaluate-interview-answer", {
+            const response = await fetch("https://jarvis-ace-api-hbepfjgzhmguhchv.southindia-01.azurewebsites.net/api/JobStrategist/evaluate-interview-answer", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -218,7 +218,7 @@ const InterviewSimulator = ({ job, onClose }) => {
     const finishAndSaveSession = async () => {
         setCurrentStep(99);
         try {
-            await fetch("https://localhost:7155/api/JobStrategist/save-history", {
+            await fetch("https://jarvis-ace-api-hbepfjgzhmguhchv.southindia-01.azurewebsites.net/api/JobStrategist/save-history", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -294,25 +294,26 @@ const InterviewSimulator = ({ job, onClose }) => {
 
     // --- RENDER HELPERS (NOW USING PORTALS) ---
 
+    // 1. HISTORY PROMPT VIEW
     if (showHistoryPrompt) {
         return createPortal(
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 backdrop-blur-xl p-4">
-                <div className="bg-slate-900 border border-slate-700 rounded-3xl p-10 max-w-lg w-full text-center shadow-2xl animate-in zoom-in-95 duration-500">
-                    <div className="w-20 h-20 mx-auto bg-blue-500/10 border border-blue-500/30 rounded-full flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(59,130,246,0.15)]">
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4">
+                <div className="bg-white border border-white rounded-3xl p-10 max-w-lg w-full text-center shadow-[0_20px_50px_-10px_rgba(139,92,246,0.2)] animate-in zoom-in-95 duration-500">
+                    <div className="w-20 h-20 mx-auto bg-blue-50 border border-blue-200 rounded-full flex items-center justify-center mb-6 shadow-sm">
                         <span className="text-4xl">🕰️</span>
                     </div>
-                    <h2 className="text-2xl font-black text-white uppercase tracking-widest mb-4">Training Record Found</h2>
-                    <p className="text-slate-400 font-serif leading-relaxed mb-8">
-                        ACE has a previous mock interview session logged for this specific role. Would you like to review your past performance report, or initialize a new 10-question gauntlet?
+                    <h2 className="text-2xl font-black text-slate-800 uppercase tracking-widest mb-4">Training Record Found</h2>
+                    <p className="text-slate-600 font-serif leading-relaxed mb-8">
+                        ACE has a previous mock interview session logged for this specific role. Would you like to review your past performance report, or initialize a new gauntlet?
                     </p>
                     <div className="flex flex-col gap-4">
-                        <button onClick={handleViewPastSession} className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(59,130,246,0.2)] hover:-translate-y-0.5">
+                        <button onClick={handleViewPastSession} className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold uppercase tracking-widest transition-all shadow-md hover:-translate-y-0.5">
                             📊 View Past Report
                         </button>
-                        <button onClick={handleStartNewSession} className="w-full py-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl font-bold uppercase tracking-widest transition-all">
+                        <button onClick={handleStartNewSession} className="w-full py-4 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl font-bold uppercase tracking-widest transition-all shadow-sm">
                             🔄 Start New Gauntlet
                         </button>
-                        <button onClick={onClose} className="mt-2 text-slate-500 hover:text-red-400 text-xs font-bold uppercase tracking-widest transition-colors">
+                        <button onClick={onClose} className="mt-2 text-slate-500 hover:text-rose-600 text-xs font-bold uppercase tracking-widest transition-colors">
                             Abort
                         </button>
                     </div>
@@ -322,61 +323,63 @@ const InterviewSimulator = ({ job, onClose }) => {
         );
     }
 
+    // 2. LOADING VIEW
     if (isGenerating) {
         return createPortal(
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 backdrop-blur-xl">
-                <div className="flex flex-col items-center animate-pulse">
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md">
+                <div className="flex flex-col items-center animate-pulse bg-white/90 px-16 py-12 rounded-[36px] shadow-2xl border border-white">
                     <span className="text-6xl mb-6">🧠</span>
-                    <h2 className="text-2xl font-black tracking-widest uppercase text-purple-400">Initializing Interrogation Protocol</h2>
-                    <p className="text-slate-400 mt-2 font-mono text-sm">Analyzing job requirements and formatting technical questions...</p>
+                    <h2 className="text-2xl font-black tracking-widest uppercase text-violet-600">Initializing Interrogation Protocol</h2>
+                    <p className="text-slate-500 mt-2 font-mono text-sm">Analyzing job requirements and formatting technical questions...</p>
                 </div>
             </div>,
             document.body
         );
     }
 
+    // 3. ERROR VIEW
     if (error) {
         return createPortal(
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 backdrop-blur-xl p-4">
-                <div className="bg-red-950/30 border border-red-500/50 p-8 rounded-2xl max-w-lg text-center w-full">
-                    <h2 className="text-red-400 font-bold text-xl uppercase mb-4">System Failure</h2>
-                    <p className="text-slate-300 mb-6">{error}</p>
-                    <button onClick={onClose} className="px-6 py-3 font-bold uppercase tracking-widest bg-slate-800 text-white rounded hover:bg-slate-700 w-full transition-colors">Exit Simulator</button>
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4">
+                <div className="bg-rose-50 border border-rose-200 p-8 rounded-2xl max-w-lg text-center w-full shadow-xl">
+                    <h2 className="text-rose-600 font-bold text-xl uppercase mb-4">System Failure</h2>
+                    <p className="text-slate-700 mb-6 font-serif">{error}</p>
+                    <button onClick={onClose} className="px-6 py-3 font-bold uppercase tracking-widest bg-slate-800 text-white rounded hover:bg-slate-700 w-full transition-colors shadow-md">Exit Simulator</button>
                 </div>
             </div>,
             document.body
         );
     }
 
-    // HANDOFF VIEW
+    // 4. HANDOFF VIEW (RATE LIMIT)
     if (currentStep === 429) {
         return createPortal(
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 backdrop-blur-xl p-4">
-                <div className="text-center animate-in zoom-in-95 duration-500 max-w-2xl mx-auto py-10 bg-[#0f172a] p-10 rounded-3xl border border-amber-500/30 shadow-2xl">
-                    <div className="w-20 h-20 mx-auto bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(245,158,11,0.15)]">
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4">
+                <div className="text-center animate-in zoom-in-95 duration-500 max-w-2xl mx-auto py-10 bg-white p-10 rounded-3xl border border-amber-200 shadow-2xl">
+                    <div className="w-20 h-20 mx-auto bg-amber-50 border border-amber-200 rounded-full flex items-center justify-center mb-6 shadow-sm">
                         <span className="text-4xl">⚠️</span>
                     </div>
-                    <h3 className="text-2xl font-black text-amber-400 uppercase tracking-widest mb-4">Rate Limit Reached</h3>
-                    <p className="text-slate-300 font-serif leading-relaxed mb-8">
+                    <h3 className="text-2xl font-black text-amber-600 uppercase tracking-widest mb-4">Rate Limit Reached</h3>
+                    <p className="text-slate-600 font-serif leading-relaxed mb-8">
                         ACE local token reserves are depleted. To bypass this restriction and continue your technical screen, initiate the Gemini Handoff Protocol.
                     </p>
 
-                    <div className="bg-slate-900 border border-slate-700 p-6 rounded-xl text-left mb-8 shadow-inner relative group">
+                    <div className="bg-slate-50 border border-slate-200 p-6 rounded-xl text-left mb-8 shadow-inner relative group">
                         <div className="flex justify-between items-start mb-3">
-                            <span className="text-[10px] text-amber-500/80 uppercase tracking-widest font-black block">Mega-Prompt Generated</span>
+                            <span className="text-[10px] text-amber-600 uppercase tracking-widest font-black block">Mega-Prompt Generated</span>
                             <button
                                 onClick={handleJustCopy}
-                                className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border transition-all duration-200 flex items-center gap-2 ${isPromptCopied ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50' : 'bg-slate-800 text-amber-400/70 border-slate-700 hover:bg-slate-700 hover:text-amber-400'}`}
+                                className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border transition-all duration-200 flex items-center gap-2 ${isPromptCopied ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-white text-amber-600 border-slate-200 hover:bg-slate-50'}`}
                             >
                                 {isPromptCopied ? '✅ COPIED' : '📋 COPY TEXT'}
                             </button>
                         </div>
-                        <p className="text-slate-400 text-xs font-mono line-clamp-3 italic">"You are ACE, an elite Principal Engineer conducting a rigorous technical job interview. I am applying for this role..."</p>
+                        <p className="text-slate-500 text-xs font-mono line-clamp-3 italic">"You are ACE, an elite Principal Engineer conducting a rigorous technical job interview. I am applying for this role..."</p>
                     </div>
 
                     <div className="flex gap-4">
-                        <button onClick={onClose} className="px-6 py-4 font-bold uppercase tracking-widest text-slate-400 border border-slate-700 hover:bg-slate-800 rounded-xl transition-all w-1/3">Abort</button>
-                        <button onClick={copyHandoffPrompt} className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/50 px-8 py-4 rounded-xl font-black uppercase tracking-widest flex-1 transition-all hover:shadow-[0_0_20px_rgba(245,158,11,0.2)]">
+                        <button onClick={onClose} className="px-6 py-4 font-bold uppercase tracking-widest text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-700 rounded-xl transition-all w-1/3 shadow-sm">Abort</button>
+                        <button onClick={copyHandoffPrompt} className="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 px-8 py-4 rounded-xl font-black uppercase tracking-widest flex-1 transition-all shadow-sm">
                             Open Gemini ↗
                         </button>
                     </div>
@@ -386,19 +389,19 @@ const InterviewSimulator = ({ job, onClose }) => {
         );
     }
 
-    // FINISHED / REPORT VIEW
+    // 5. FINISHED / REPORT VIEW
     if (currentStep === 99) {
         const averageScore = evaluations.length > 0 ? Math.round(evaluations.reduce((acc, curr) => acc + curr.score, 0) / evaluations.length) : 0;
         return createPortal(
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 backdrop-blur-xl p-4">
-                <div className="bg-slate-900 border border-slate-700 rounded-3xl p-10 max-w-2xl w-full text-center shadow-2xl animate-in fade-in zoom-in duration-500 max-h-[90vh] overflow-y-auto custom-scrollbar">
-                    <h2 className="text-3xl font-black text-white uppercase tracking-widest mb-6">Simulation Complete</h2>
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4">
+                <div className="bg-white/95 border border-white rounded-3xl p-10 max-w-2xl w-full text-center shadow-[0_20px_50px_-10px_rgba(139,92,246,0.15)] animate-in fade-in zoom-in duration-500 max-h-[90vh] overflow-y-auto custom-scrollbar">
+                    <h2 className="text-3xl font-black text-slate-800 uppercase tracking-widest mb-6">Simulation Complete</h2>
                     <div className="flex justify-center mb-8">
-                        <div className={`w-32 h-32 rounded-full flex items-center justify-center border-4 ${averageScore >= 80 ? 'border-emerald-500 text-emerald-400' : averageScore >= 60 ? 'border-yellow-500 text-yellow-400' : 'border-pink-500 text-pink-500'}`}>
+                        <div className={`w-32 h-32 rounded-full flex items-center justify-center border-4 bg-white shadow-inner ${averageScore >= 80 ? 'border-emerald-500 text-emerald-600' : averageScore >= 60 ? 'border-amber-400 text-amber-500' : 'border-rose-400 text-rose-500'}`}>
                             <span className="text-4xl font-black">{averageScore}%</span>
                         </div>
                     </div>
-                    <p className="text-slate-300 mb-8 font-serif leading-relaxed">
+                    <p className="text-slate-600 mb-8 font-serif leading-relaxed">
                         {averageScore >= 80 ? "Outstanding performance. You are technically calibrated for this role." :
                             averageScore >= 60 ? "Acceptable, but noticeable gaps remain. Review the recommended resources before the actual interview." :
                                 "Critical knowledge gaps detected. Do not interview until you have heavily reviewed the core concepts."}
@@ -406,22 +409,22 @@ const InterviewSimulator = ({ job, onClose }) => {
 
                     <div className="space-y-6 text-left mb-8">
                         {evaluations.map((evalObj, idx) => (
-                            <div key={idx} className="bg-slate-950/50 p-5 rounded-xl border border-slate-800">
-                                <h4 className="text-white font-bold mb-2 flex justify-between items-start">
+                            <div key={idx} className="bg-slate-50 p-5 rounded-xl border border-slate-200 shadow-sm">
+                                <h4 className="text-slate-800 font-bold mb-2 flex justify-between items-start">
                                     <span className="text-sm">Q{idx + 1}: {evalObj.question}</span>
-                                    <span className={`font-black ml-4 ${evalObj.score >= 80 ? 'text-emerald-400' : evalObj.score >= 60 ? 'text-yellow-400' : 'text-pink-500'}`}>{evalObj.score}%</span>
+                                    <span className={`font-black ml-4 ${evalObj.score >= 80 ? 'text-emerald-600' : evalObj.score >= 60 ? 'text-amber-500' : 'text-rose-500'}`}>{evalObj.score}%</span>
                                 </h4>
-                                <div className="text-slate-400 text-xs font-serif mb-3 p-3 bg-slate-900 rounded-lg">"{evalObj.candidate_answer}"</div>
-                                <div className="text-purple-300 text-xs font-serif leading-relaxed italic border-l-2 border-purple-500/50 pl-3">{evalObj.feedback}</div>
+                                <div className="text-slate-600 text-xs font-serif mb-3 p-3 bg-white border border-slate-100 rounded-lg shadow-inner">"{evalObj.candidate_answer}"</div>
+                                <div className="text-violet-700 text-xs font-serif leading-relaxed italic border-l-2 border-violet-300 pl-3">{evalObj.feedback}</div>
                             </div>
                         ))}
                     </div>
 
                     <div className="flex gap-4">
-                        <button onClick={handleExportPDF} className="w-1/2 py-4 bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 text-blue-400 rounded-xl font-bold uppercase tracking-widest transition-all">
+                        <button onClick={handleExportPDF} className="w-1/2 py-4 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 rounded-xl font-bold uppercase tracking-widest transition-all shadow-sm">
                             📄 Export Takeouts
                         </button>
-                        <button onClick={onClose} className="w-1/2 py-4 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-bold uppercase tracking-widest transition-all">
+                        <button onClick={onClose} className="w-1/2 py-4 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold uppercase tracking-widest transition-all shadow-md hover:-translate-y-0.5">
                             Return to Vault
                         </button>
                     </div>
@@ -431,7 +434,7 @@ const InterviewSimulator = ({ job, onClose }) => {
         );
     }
 
-    // ACTIVE QUESTION VIEW
+    // 6. ACTIVE QUESTION VIEW
     const questionIndex = currentStep - 1;
     const currentQuestion = questions[questionIndex];
     const currentEvaluation = evaluations[questionIndex];
@@ -439,34 +442,34 @@ const InterviewSimulator = ({ job, onClose }) => {
     if (!currentQuestion) return null;
 
     return createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 backdrop-blur-2xl p-4 overflow-y-auto">
-            <div className="bg-slate-900/80 border border-slate-700/50 rounded-[24px] w-full max-w-4xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-8 duration-500 flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4 overflow-y-auto">
+            <div className="bg-white/90 border border-white rounded-[36px] w-full max-w-4xl shadow-[0_20px_50px_-10px_rgba(139,92,246,0.15)] overflow-hidden animate-in fade-in slide-in-from-bottom-8 duration-500 flex flex-col max-h-[90vh]">
 
-                <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-950/50 shrink-0">
+                <div className="p-6 border-b border-violet-100 flex justify-between items-center bg-slate-50/80 shrink-0">
                     <div className="flex items-center gap-4">
-                        <span className="bg-purple-500/20 text-purple-400 border border-purple-500/30 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-widest">
+                        <span className="bg-violet-100 text-violet-700 border border-violet-200 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-widest shadow-sm">
                             Question {currentStep} of {questions.length}
                         </span>
-                        <span className="text-slate-400 text-sm font-mono">{currentQuestion.focus_area}</span>
+                        <span className="text-slate-500 text-sm font-mono">{currentQuestion.focus_area}</span>
                     </div>
 
                     {!currentEvaluation && (
-                        <div className={`px-4 py-1.5 rounded-full border text-xs font-bold font-mono flex items-center gap-2 ${timeLeft < 30 ? 'bg-red-500/10 border-red-500/50 text-red-400 animate-pulse' : 'bg-slate-800/50 border-slate-700 text-emerald-400'}`}>
+                        <div className={`px-4 py-1.5 rounded-full border text-xs font-bold font-mono flex items-center gap-2 shadow-sm ${timeLeft < 30 ? 'bg-rose-50 border-rose-200 text-rose-600 animate-pulse' : 'bg-white border-slate-200 text-emerald-600'}`}>
                             <span>⏱️</span> {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
                         </div>
                     )}
                 </div>
 
-                <div className="p-8 overflow-y-auto custom-scrollbar relative">
+                <div className="p-8 md:p-10 overflow-y-auto custom-scrollbar relative flex-1">
                     {ACESpeaking && (
                         <div className="absolute top-8 right-8 flex gap-1 items-end h-6">
-                            <div className="w-1 bg-purple-500 animate-[bounce_1s_infinite] h-full"></div>
-                            <div className="w-1 bg-purple-500 animate-[bounce_1s_infinite_0.2s] h-2/3"></div>
-                            <div className="w-1 bg-purple-500 animate-[bounce_1s_infinite_0.4s] h-full"></div>
+                            <div className="w-1 bg-violet-500 animate-[bounce_1s_infinite] h-full"></div>
+                            <div className="w-1 bg-violet-500 animate-[bounce_1s_infinite_0.2s] h-2/3"></div>
+                            <div className="w-1 bg-violet-500 animate-[bounce_1s_infinite_0.4s] h-full"></div>
                         </div>
                     )}
 
-                    <h3 className="text-2xl font-medium text-white leading-relaxed mb-8 pr-10">
+                    <h3 className="text-2xl font-medium text-slate-800 leading-relaxed mb-8 pr-10 font-serif">
                         {currentQuestion.question_text}
                     </h3>
 
@@ -478,24 +481,24 @@ const InterviewSimulator = ({ job, onClose }) => {
                                     onChange={(e) => setUserAnswer(e.target.value)}
                                     placeholder={ACESpeaking ? "Listen to ACE..." : "Type your technical answer here, or click the mic to speak..."}
                                     disabled={ACESpeaking}
-                                    className="w-full h-48 bg-slate-950 border border-slate-700 rounded-xl p-5 text-slate-300 font-serif leading-relaxed focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none resize-none transition-all disabled:opacity-50"
+                                    className="w-full h-48 bg-slate-50 border border-slate-200 rounded-xl p-5 text-slate-700 font-serif leading-relaxed focus:border-violet-400 focus:ring-2 focus:ring-violet-100 outline-none resize-none transition-all disabled:opacity-50 shadow-inner"
                                 />
                                 <button
                                     onClick={toggleMic}
                                     disabled={ACESpeaking}
-                                    className={`absolute bottom-4 right-4 w-10 h-10 rounded-full flex items-center justify-center transition-all ${isListening ? 'bg-red-500/20 border-red-500/50 text-red-400 animate-pulse' : 'bg-slate-800 border-slate-600 text-slate-400 hover:text-white hover:border-slate-500'} disabled:hidden`}
+                                    className={`absolute bottom-4 right-4 w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm ${isListening ? 'bg-rose-50 border border-rose-200 text-rose-600 animate-pulse' : 'bg-white border border-slate-200 text-slate-500 hover:text-violet-600 hover:border-violet-200'} disabled:hidden`}
                                     title="Voice Dictation"
                                 >
                                     🎤
                                 </button>
                             </div>
                             <div className="flex justify-between items-center">
-                                <button onClick={onClose} className="text-slate-500 hover:text-red-400 text-xs uppercase tracking-widest font-bold transition-colors">Abort Session</button>
+                                <button onClick={onClose} className="text-slate-500 hover:text-rose-600 text-xs uppercase tracking-widest font-bold transition-colors">Abort Session</button>
                                 <button
                                     id="submit-answer-btn"
                                     onClick={handleEvaluateAnswer}
                                     disabled={(!userAnswer.trim() && timeLeft > 0) || isEvaluating || ACESpeaking}
-                                    className="bg-purple-600 hover:bg-purple-500 text-white px-8 py-3 rounded-xl font-bold uppercase tracking-widest text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                    className="bg-violet-600 hover:bg-violet-700 text-white px-8 py-3 rounded-xl font-bold uppercase tracking-widest text-sm transition-all shadow-md hover:-translate-y-0.5 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 disabled:hover:translate-y-0"
                                 >
                                     {isEvaluating ? "ACE is Evaluating..." : "Submit Answer"}
                                 </button>
@@ -503,28 +506,28 @@ const InterviewSimulator = ({ job, onClose }) => {
                         </div>
                     ) : (
                         <div className="space-y-8 animate-in fade-in slide-in-from-top-4 duration-500">
-                            <div className={`p-6 rounded-2xl border ${currentEvaluation.score >= 80 ? 'bg-emerald-950/20 border-emerald-500/30' : currentEvaluation.score >= 60 ? 'bg-yellow-950/20 border-yellow-500/30' : 'bg-pink-950/20 border-pink-500/30'} flex items-start gap-6`}>
-                                <div className={`text-4xl font-black ${currentEvaluation.score >= 80 ? 'text-emerald-400' : currentEvaluation.score >= 60 ? 'text-yellow-400' : 'text-pink-500'}`}>
+                            <div className={`p-6 rounded-2xl border shadow-sm flex items-start gap-6 ${currentEvaluation.score >= 80 ? 'bg-emerald-50 border-emerald-200' : currentEvaluation.score >= 60 ? 'bg-amber-50 border-amber-200' : 'bg-rose-50 border-rose-200'}`}>
+                                <div className={`text-4xl font-black ${currentEvaluation.score >= 80 ? 'text-emerald-600' : currentEvaluation.score >= 60 ? 'text-amber-500' : 'text-rose-500'}`}>
                                     {currentEvaluation.score}%
                                 </div>
                                 <div>
                                     <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Technical Feedback</h4>
-                                    <p className="text-slate-300 text-sm leading-relaxed font-serif">{currentEvaluation.feedback}</p>
+                                    <p className="text-slate-700 text-sm leading-relaxed font-serif">{currentEvaluation.feedback}</p>
                                 </div>
                             </div>
 
                             <div>
-                                <h4 className="text-xs font-black uppercase tracking-widest text-emerald-400 mb-3 flex items-center gap-2">
+                                <h4 className="text-xs font-black uppercase tracking-widest text-emerald-600 mb-3 flex items-center gap-2">
                                     <span>💡</span> The Ideal Answer
                                 </h4>
-                                <div className="bg-slate-950 border border-slate-800 p-5 rounded-xl text-emerald-100/70 text-sm font-serif italic border-l-2 border-l-emerald-500/50 shadow-inner">
+                                <div className="bg-slate-50 border border-slate-200 p-5 rounded-xl text-emerald-800 text-sm font-serif italic border-l-4 border-l-emerald-400 shadow-inner">
                                     "{currentEvaluation.better_answer_example}"
                                 </div>
                             </div>
 
                             {currentEvaluation.recommended_resources && currentEvaluation.recommended_resources.length > 0 && (
-                                <div className="pt-6 border-t border-slate-800">
-                                    <h4 className="text-xs font-black uppercase tracking-widest text-blue-400 mb-4 flex items-center gap-2">
+                                <div className="pt-6 border-t border-violet-100">
+                                    <h4 className="text-xs font-black uppercase tracking-widest text-blue-600 mb-4 flex items-center gap-2">
                                         <span>📚</span> AI Recommended Study Materials
                                     </h4>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -534,13 +537,13 @@ const InterviewSimulator = ({ job, onClose }) => {
                                                 href={generateResourceLink(res.platform, res.search_query)}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="bg-slate-800/50 hover:bg-slate-800 border border-slate-700 hover:border-blue-500/50 p-4 rounded-xl flex items-center justify-between group transition-all"
+                                                className="bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-300 p-4 rounded-xl flex items-center justify-between group transition-all shadow-sm"
                                             >
                                                 <div>
                                                     <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">{res.platform}</div>
-                                                    <div className="text-sm font-medium text-blue-300 group-hover:text-blue-400 transition-colors line-clamp-1">{res.topic}</div>
+                                                    <div className="text-sm font-medium text-blue-700 group-hover:text-blue-800 transition-colors line-clamp-1">{res.topic}</div>
                                                 </div>
-                                                <span className="text-slate-600 group-hover:text-blue-400 transition-colors">↗</span>
+                                                <span className="text-slate-400 group-hover:text-blue-600 transition-colors">↗</span>
                                             </a>
                                         ))}
                                     </div>
@@ -550,7 +553,7 @@ const InterviewSimulator = ({ job, onClose }) => {
                             <div className="flex justify-end pt-4">
                                 <button
                                     onClick={handleNextQuestion}
-                                    className="bg-slate-800 hover:bg-slate-700 text-white px-8 py-3 rounded-xl font-bold uppercase tracking-widest text-sm transition-all border border-slate-700 hover:border-slate-500"
+                                    className="bg-white hover:bg-slate-50 text-slate-700 px-8 py-3 rounded-xl font-bold uppercase tracking-widest text-sm transition-all border border-slate-200 shadow-sm hover:shadow-md"
                                 >
                                     {currentStep < questions.length ? "Next Question ➡️" : "View Final Report 📊"}
                                 </button>

@@ -16,7 +16,7 @@
       "dotnetRunMessages": true,
       "launchBrowser": true,
       "launchUrl": "swagger",
-      "applicationUrl": "https://localhost:7155;http://localhost:5271",
+      "applicationUrl": "https://localhost:7155;https://jarvis-ace-api-hbepfjgzhmguhchv.southindia-01.azurewebsites.net;http://localhost:5271",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
