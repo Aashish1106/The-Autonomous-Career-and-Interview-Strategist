@@ -63,3 +63,26 @@
     .custom-scrollbar::-webkit-scrollbar {
         display: none;
     }
+
+
+
+/* ----------------------------------------- */
+/* MOBILE OPTIMIZATIONS & SCROLLBAR HIDING   */
+/* ----------------------------------------- */
+
+/* Hides the scrollbar but keeps the functionality */
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+
+.scrollbar-hide {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+    -webkit-overflow-scrolling: touch; /* Buttery smooth momentum scrolling on iOS */
+}
+
+/* Optional: Adds a subtle fade effect to the edges of scrolling containers */
+.scroll-fade-edges {
+    mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+}

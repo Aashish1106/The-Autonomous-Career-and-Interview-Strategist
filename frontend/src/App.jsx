@@ -52,28 +52,33 @@ function App() {
     return (
         <div className="min-h-screen bg-gradient-to-br from-violet-200 via-purple-100 to-fuchsia-100 py-12 px-4 font-sans text-slate-800 selection:bg-violet-500/20">
 
-            {/* ---> DATABASE TELEMETRY HUD (LIGHT MODE) <--- */}
-            <div className="absolute top-6 right-6 md:top-8 md:right-8 flex items-center gap-3 bg-white/80 border border-white rounded-full px-4 py-2 shadow-sm backdrop-blur-md z-50">
-                <div className="flex items-center justify-center w-3 h-3">
-                    <span className={`absolute w-3 h-3 rounded-full opacity-75 animate-ping ${dbStatus === 'connected' ? 'bg-emerald-400' : dbStatus === 'connecting' ? 'bg-amber-400' : 'bg-rose-400'}`}></span>
-                    <span className={`relative w-2 h-2 rounded-full ${dbStatus === 'connected' ? 'bg-emerald-500' : dbStatus === 'connecting' ? 'bg-amber-500' : 'bg-rose-500'}`}></span>
+            {/* ---> DATABASE TELEMETRY HUD (RESPONSIVE) <--- */}
+            {/* Changed top-6 to top-4 md:top-8 to keep it out of the way on small screens */}
+            <div className="absolute top-4 right-4 md:top-8 md:right-8 flex items-center gap-2 md:gap-3 bg-white/80 border border-white rounded-full px-3 py-1.5 md:px-4 md:py-2 shadow-sm backdrop-blur-md z-50">
+                <div className="flex items-center justify-center w-2 h-2 md:w-3 md:h-3">
+                    <span className={`absolute w-2 h-2 md:w-3 md:h-3 rounded-full opacity-75 animate-ping ${dbStatus === 'connected' ? 'bg-emerald-400' : dbStatus === 'connecting' ? 'bg-amber-400' : 'bg-rose-400'}`}></span>
+                    <span className={`relative w-1.5 h-1.5 md:w-2 md:h-2 rounded-full ${dbStatus === 'connected' ? 'bg-emerald-500' : dbStatus === 'connecting' ? 'bg-amber-500' : 'bg-rose-500'}`}></span>
                 </div>
-                <span className="text-[10px] font-mono font-bold tracking-widest uppercase text-slate-500">
-                    Postgres DB: <span className={dbStatus === 'connected' ? 'text-emerald-600' : dbStatus === 'connecting' ? 'text-amber-600' : 'text-rose-600'}>
+                {/* Hidden the "Postgres DB:" text on mobile to save space, showing only status */}
+                <span className="text-[9px] md:text-[10px] font-mono font-bold tracking-widest uppercase text-slate-500">
+                    <span className="hidden md:inline">Postgres DB: </span>
+                    <span className={dbStatus === 'connected' ? 'text-emerald-600' : dbStatus === 'connecting' ? 'text-amber-600' : 'text-rose-600'}>
                         {dbStatus === 'connected' ? 'ONLINE' : dbStatus === 'connecting' ? 'SYNCING...' : 'OFFLINE'}
                     </span>
                 </span>
             </div>
 
-            <div className="max-w-3xl mx-auto text-center mb-12 animate-in slide-in-from-top-4 fade-in duration-700">
-                <div className="inline-flex items-center justify-center px-4 py-1.5 mb-6 rounded-full bg-white border border-violet-200 text-violet-700 text-sm font-semibold uppercase tracking-widest shadow-sm">
-                    <span className="w-2 h-2 rounded-full bg-violet-500 mr-2 animate-pulse"></span>
+            {/* Adjusted margin-top so it doesn't overlap with the absolute HUD on mobile */}
+            <div className="max-w-3xl mx-auto text-center mt-8 md:mt-0 mb-8 md:mb-12 animate-in slide-in-from-top-4 fade-in duration-700">
+                <div className="inline-flex items-center justify-center px-3 py-1 md:px-4 md:py-1.5 mb-4 md:mb-6 rounded-full bg-white border border-violet-200 text-violet-700 text-xs md:text-sm font-semibold uppercase tracking-widest shadow-sm">
+                    <span className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-violet-500 mr-2 animate-pulse"></span>
                     A JARVIS Agentic Pipeline
                 </div>
-                <h1 className="text-5xl font-black mb-4 tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-700 via-blue-800 to-teal-700 drop-shadow-sm">
+                {/* Responsive text sizing: 4xl on mobile, 5xl on medium screens, 6xl on large */}
+                <h1 className="text-4xl md:text-5xl lg:text-6xl font-black mb-3 md:mb-4 tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-700 via-blue-800 to-teal-700 drop-shadow-sm leading-tight">
                     Autonomous Career Expert
                 </h1>
-                <p className="text-slate-600 font-medium text-lg">
+                <p className="text-slate-600 font-medium text-base md:text-lg px-2">
                     Semantic evaluation against your cloud-synced Postgres vector profile.
                 </p>
             </div>
@@ -86,21 +91,24 @@ function App() {
                 {/* ---> THE TABBED DATA CONTAINER (FROSTED LIGHT MODE) <--- */}
                 <div className="bg-white/60 backdrop-blur-xl rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white overflow-hidden mt-8 relative">
 
-                    {/* The Sliding Glowing Underline */}
+                    {/* The Sliding Glowing Underline - Fixed for Mobile Scrolling */}
                     <div
-                        className="absolute top-[55px] left-0 h-[3px] w-1/3 transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] z-20"
+                        // Changed width from w-1/3 to w-[160px] to perfectly match the button min-width!
+                        // Added hidden md:block so we just remove the line on super small screens where it conflicts with scrolling
+                        className="absolute top-[55px] left-0 h-[3px] w-[160px] transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] z-20 hidden sm:block"
                         style={{
-                            transform: activeTab === 'search' ? 'translateX(0%)' : activeTab === 'history' ? 'translateX(100%)' : 'translateX(200%)',
+                            transform: activeTab === 'search' ? 'translateX(0px)' : activeTab === 'history' ? 'translateX(160px)' : 'translateX(320px)',
                             backgroundColor: activeTab === 'search' ? '#10b981' : activeTab === 'history' ? '#a855f7' : '#3b82f6',
                             boxShadow: activeTab === 'search' ? '0 0 15px rgba(16,185,129,0.4)' : activeTab === 'history' ? '0 0 15px rgba(168,85,247,0.4)' : '0 0 15px rgba(59,130,246,0.4)'
                         }}
                     />
 
                     {/* Tab Navigation */}
-                    <div className="flex border-b border-violet-100 relative z-10 bg-white/40">
+                    <div className="flex overflow-x-auto whitespace-nowrap scrollbar-hide border-b border-violet-100 relative z-10 bg-white/40 custom-scrollbar">
                         <button
                             onClick={() => setActiveTab('search')}
-                            className={`flex-1 py-4 text-center font-bold text-sm tracking-wider uppercase transition-colors duration-300 flex items-center justify-center gap-2 ${activeTab === 'search' ? 'text-emerald-700 bg-emerald-50' : 'text-slate-500 hover:text-slate-700 hover:bg-white/60'}`}
+                            // Added shrink-0 and min-w-[160px] to ensure they never squish on mobile
+                            className={`shrink-0 min-w-[160px] flex-1 py-4 text-center font-bold text-sm tracking-wider uppercase transition-colors duration-300 flex items-center justify-center gap-2 ${activeTab === 'search' ? 'text-emerald-700 bg-emerald-50' : 'text-slate-500 hover:text-slate-700 hover:bg-white/60'}`}
                         >
                             <span className={`transition-all duration-300 ${activeTab === 'search' ? 'scale-110' : 'scale-100 grayscale opacity-70'}`}>🧠</span>
                             Vector RAG Search
@@ -108,7 +116,7 @@ function App() {
 
                         <button
                             onClick={() => setActiveTab('history')}
-                            className={`flex-1 py-4 text-center font-bold text-sm tracking-wider uppercase transition-colors duration-300 flex items-center justify-center gap-2 ${activeTab === 'history' ? 'text-violet-700 bg-violet-50' : 'text-slate-500 hover:text-slate-700 hover:bg-white/60'}`}
+                            className={`shrink-0 min-w-[160px] flex-1 py-4 text-center font-bold text-sm tracking-wider uppercase transition-colors duration-300 flex items-center justify-center gap-2 ${activeTab === 'history' ? 'text-violet-700 bg-violet-50' : 'text-slate-500 hover:text-slate-700 hover:bg-white/60'}`}
                         >
                             <span className={`transition-all duration-300 ${activeTab === 'history' ? 'scale-110' : 'scale-100 grayscale opacity-70'}`}>🗄️</span>
                             Evaluation History
@@ -116,7 +124,7 @@ function App() {
 
                         <button
                             onClick={() => setActiveTab('settings')}
-                            className={`flex-1 py-4 text-center font-bold text-sm tracking-wider uppercase transition-colors duration-300 flex items-center justify-center gap-2 ${activeTab === 'settings' ? 'text-blue-700 bg-blue-50' : 'text-slate-500 hover:text-slate-700 hover:bg-white/60'}`}
+                            className={`shrink-0 min-w-[160px] flex-1 py-4 text-center font-bold text-sm tracking-wider uppercase transition-colors duration-300 flex items-center justify-center gap-2 ${activeTab === 'settings' ? 'text-blue-700 bg-blue-50' : 'text-slate-500 hover:text-slate-700 hover:bg-white/60'}`}
                         >
                             <span className={`transition-all duration-300 ${activeTab === 'settings' ? 'scale-110' : 'scale-100 grayscale opacity-70'}`}>⚙️</span>
                             Admin Data
@@ -201,17 +209,18 @@ function App() {
                                                 </div>
 
                                                 {/* The Two Distinct Data Pods */}
-                                                <div className="flex gap-3 w-full md:w-auto relative z-10 pl-2 md:pl-0 mt-2 md:mt-0">
+                                                <div className="flex gap-2 md:gap-3 w-full md:w-auto relative z-10 pl-2 md:pl-0 mt-3 md:mt-0">
                                                     {/* LLM Vibes / ACE Score (Gray Pod) */}
-                                                    <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-center min-w-[100px]">
-                                                        <div className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">ACE Score</div>
-                                                        <div className="text-slate-700 font-black text-xl">{match.llmMatchScore}%</div>
+                                                    {/* Added flex-1 so they take up exactly 50% of the screen each on mobile */}
+                                                    <div className="flex-1 md:flex-none bg-slate-50 border border-slate-200 rounded-xl px-2 md:px-4 py-2 text-center min-w-[100px]">
+                                                        <div className="text-[8px] md:text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">ACE Score</div>
+                                                        <div className="text-slate-700 font-black text-lg md:text-xl">{match.llmMatchScore}%</div>
                                                     </div>
 
                                                     {/* Vector Math (Green Pod) */}
-                                                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2 text-center min-w-[100px]">
-                                                        <div className="text-[9px] text-emerald-600 font-bold uppercase tracking-widest mb-1">Vector Match</div>
-                                                        <div className="text-emerald-700 font-black text-xl">{match.vectorMatchScore}%</div>
+                                                    <div className="flex-1 md:flex-none bg-emerald-50 border border-emerald-200 rounded-xl px-2 md:px-4 py-2 text-center min-w-[100px]">
+                                                        <div className="text-[8px] md:text-[9px] text-emerald-600 font-bold uppercase tracking-widest mb-1">Vector Match</div>
+                                                        <div className="text-emerald-700 font-black text-lg md:text-xl">{match.vectorMatchScore}%</div>
                                                     </div>
                                                 </div>
                                             </div>

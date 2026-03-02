@@ -101,34 +101,71 @@ export default function KanbanBoard() {
                                             const safeId = String(job.id || job.Id || `fallback-${index}`);
                                             return (
                                                 <Draggable key={safeId} draggableId={safeId} index={index}>
-                                                    {(provided, snapshot) => (
-                                                        <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
-                                                            className={`relative mb-4 bg-white/90 backdrop-blur-sm border rounded-xl p-4 transition-all duration-200 ease-out select-none
-                                                                ${snapshot.isDragging
-                                                                    ? 'border-violet-400 scale-105 shadow-[0_25px_35px_-5px_rgba(139,92,246,0.25)] rotate-3 z-50 cursor-grabbing'
-                                                                    : 'border-violet-100 hover:border-violet-300 hover:-translate-y-1 hover:shadow-[0_10px_15px_-3px_rgba(139,92,246,0.1)] cursor-grab'
-                                                                }`}>
-                                                            <div className="flex justify-between items-start mb-2">
-                                                                <div className={`px-2 py-1 rounded border text-[10px] font-black font-mono ${getScoreColor(job.matchScore || job.MatchScore)}`}>{job.matchScore || job.MatchScore}% MATCH</div>
-                                                                <button onClick={(e) => toggleMenu(e, safeId)} className="text-slate-400 hover:text-violet-600 transition-colors p-1 relative z-10">•••</button>
-                                                            </div>
-                                                            <h4 className="text-slate-800 font-bold text-sm leading-tight mb-1 pr-4">{job.roleTitle || job.RoleTitle}</h4>
-                                                            <p className="text-violet-600 text-xs font-mono">{job.companyName || job.CompanyName}</p>
+                                                    {(provided, snapshot) => {
 
-                                                            {activeMenuId === safeId && (
-                                                                <div className="absolute top-10 right-2 w-48 bg-white border border-violet-100 rounded-lg shadow-xl py-1 z-[100] animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
-                                                                    <button onClick={(e) => openJobDetails(e, job)} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-700 flex items-center gap-3 transition-colors">
-                                                                        <span className="text-violet-500">🔍</span> Open MatchCard
-                                                                    </button>
-                                                                    {job.jobUrl && (
-                                                                        <button onClick={() => window.open(job.jobUrl, '_blank')} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-700 flex items-center gap-3 transition-colors">
-                                                                            <span className="text-slate-400">🔗</span> View Original Post
-                                                                        </button>
-                                                                    )}
+                                                        // ---> THE BUTTER-SMOOTH PHYSICS ENGINE <---
+                                                        const getDraggableStyle = (style, snapshot) => {
+                                                            if (!style) return {};
+
+                                                            // 1. The Drop Phase: Snappy and satisfying
+                                                            if (snapshot.isDropAnimating) {
+                                                                return {
+                                                                    ...style,
+                                                                    transitionDuration: '0.2s',
+                                                                    transitionTimingFunction: 'cubic-bezier(0.2, 1, 0.1, 1)'
+                                                                };
+                                                            }
+
+                                                            // 2. The Drag Phase: 1:1 mouse tracking with scale/tilt
+                                                            if (snapshot.isDragging) {
+                                                                return {
+                                                                    ...style,
+                                                                    // Append tilt/scale safely to the library's translate coordinates
+                                                                    transform: style.transform ? `${style.transform} scale(1.04) rotate(2deg)` : style.transform,
+                                                                    // FORCE zero transition so it doesn't lag behind the mouse
+                                                                    transition: 'none',
+                                                                    boxShadow: '0 20px 25px -5px rgba(139, 92, 246, 0.25), 0 10px 10px -5px rgba(139, 92, 246, 0.1)',
+                                                                    zIndex: 9999
+                                                                };
+                                                            }
+
+                                                            // 3. Resting Phase
+                                                            return style;
+                                                        };
+
+                                                        return (
+                                                            <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
+                                                                style={getDraggableStyle(provided.draggableProps.style, snapshot)}
+                                                                // Removed `transition-all` and Tailwind scale/rotate. 
+                                                                // Only animating colors/shadows now to prevent stutter.
+                                                                className={`relative mb-4 bg-white/90 backdrop-blur-sm border rounded-xl p-4 select-none
+                                                                    transition-[border-color,box-shadow,background-color] duration-200 ease-out
+                                                                    ${snapshot.isDragging
+                                                                        ? 'border-violet-400 bg-white cursor-grabbing'
+                                                                        : 'border-violet-100 hover:border-violet-300 hover:shadow-md cursor-grab'
+                                                                    }`}>
+                                                                <div className="flex justify-between items-start mb-2">
+                                                                    <div className={`px-2 py-1 rounded border text-[10px] font-black font-mono ${getScoreColor(job.matchScore || job.MatchScore)}`}>{job.matchScore || job.MatchScore}% MATCH</div>
+                                                                    <button onClick={(e) => toggleMenu(e, safeId)} className="text-slate-400 hover:text-violet-600 transition-colors p-1 relative z-10">•••</button>
                                                                 </div>
-                                                            )}
-                                                        </div>
-                                                    )}
+                                                                <h4 className="text-slate-800 font-bold text-sm leading-tight mb-1 pr-4">{job.roleTitle || job.RoleTitle}</h4>
+                                                                <p className="text-violet-600 text-xs font-mono">{job.companyName || job.CompanyName}</p>
+
+                                                                {activeMenuId === safeId && (
+                                                                    <div className="absolute top-10 right-2 w-48 bg-white border border-violet-100 rounded-lg shadow-xl py-1 z-[100] animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
+                                                                        <button onClick={(e) => openJobDetails(e, job)} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-700 flex items-center gap-3 transition-colors">
+                                                                            <span className="text-violet-500">🔍</span> Open MatchCard
+                                                                        </button>
+                                                                        {job.jobUrl && (
+                                                                            <button onClick={() => window.open(job.jobUrl, '_blank')} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-700 flex items-center gap-3 transition-colors">
+                                                                                <span className="text-slate-400">🔗</span> View Original Post
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    }}
                                                 </Draggable>
                                             );
                                         })}
