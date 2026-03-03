@@ -103,31 +103,41 @@ function App() {
                         }}
                     />
 
-                    {/* Tab Navigation */}
-                    <div className="flex overflow-x-auto whitespace-nowrap scrollbar-hide border-b border-violet-100 relative z-10 bg-white/40 custom-scrollbar">
+                    {/* Tab Navigation Container */}
+                    <div className="flex overflow-x-auto whitespace-nowrap scrollbar-hide border-b border-violet-100 relative z-10 bg-white/40">
+
+                        {/* The Sliding Glowing Underline - Now mathematically linked to the relative container! */}
+                        <div
+                            className="absolute bottom-0 left-0 h-[3px] w-[33.333%] transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] z-20"
+                            style={{
+                                transform: activeTab === 'search' ? 'translateX(0%)' : activeTab === 'history' ? 'translateX(100%)' : 'translateX(200%)',
+                                backgroundColor: activeTab === 'search' ? '#10b981' : activeTab === 'history' ? '#a855f7' : '#3b82f6',
+                                boxShadow: activeTab === 'search' ? '0 0 15px rgba(16,185,129,0.4)' : activeTab === 'history' ? '0 0 15px rgba(168,85,247,0.4)' : '0 0 15px rgba(59,130,246,0.4)'
+                            }}
+                        />
+
                         <button
                             onClick={() => setActiveTab('search')}
-                            // Added shrink-0 and min-w-[160px] to ensure they never squish on mobile
-                            className={`shrink-0 min-w-[160px] flex-1 py-4 text-center font-bold text-sm tracking-wider uppercase transition-colors duration-300 flex items-center justify-center gap-2 ${activeTab === 'search' ? 'text-emerald-700 bg-emerald-50' : 'text-slate-500 hover:text-slate-700 hover:bg-white/60'}`}
+                            className={`w-[33.333%] min-w-[160px] shrink-0 py-4 px-2 text-center font-bold text-xs md:text-sm tracking-wider uppercase transition-colors duration-300 flex items-center justify-center gap-2 ${activeTab === 'search' ? 'text-emerald-700 bg-emerald-50' : 'text-slate-500 hover:text-slate-700 hover:bg-white/60'}`}
                         >
-                            <span className={`transition-all duration-300 ${activeTab === 'search' ? 'scale-110' : 'scale-100 grayscale opacity-70'}`}>🧠</span>
-                            Vector RAG Search
+                            <span className={`transition-all duration-300 hidden sm:inline-block ${activeTab === 'search' ? 'scale-110' : 'scale-100 grayscale opacity-70'}`}>🧠</span>
+                            <span className="truncate">Vector RAG Search</span>
                         </button>
 
                         <button
                             onClick={() => setActiveTab('history')}
-                            className={`shrink-0 min-w-[160px] flex-1 py-4 text-center font-bold text-sm tracking-wider uppercase transition-colors duration-300 flex items-center justify-center gap-2 ${activeTab === 'history' ? 'text-violet-700 bg-violet-50' : 'text-slate-500 hover:text-slate-700 hover:bg-white/60'}`}
+                            className={`w-[33.333%] min-w-[160px] shrink-0 py-4 px-2 text-center font-bold text-xs md:text-sm tracking-wider uppercase transition-colors duration-300 flex items-center justify-center gap-2 ${activeTab === 'history' ? 'text-violet-700 bg-violet-50' : 'text-slate-500 hover:text-slate-700 hover:bg-white/60'}`}
                         >
-                            <span className={`transition-all duration-300 ${activeTab === 'history' ? 'scale-110' : 'scale-100 grayscale opacity-70'}`}>🗄️</span>
-                            Evaluation History
+                            <span className={`transition-all duration-300 hidden sm:inline-block ${activeTab === 'history' ? 'scale-110' : 'scale-100 grayscale opacity-70'}`}>🗄️</span>
+                            <span className="truncate">Evaluation History</span>
                         </button>
 
                         <button
                             onClick={() => setActiveTab('settings')}
-                            className={`shrink-0 min-w-[160px] flex-1 py-4 text-center font-bold text-sm tracking-wider uppercase transition-colors duration-300 flex items-center justify-center gap-2 ${activeTab === 'settings' ? 'text-blue-700 bg-blue-50' : 'text-slate-500 hover:text-slate-700 hover:bg-white/60'}`}
+                            className={`w-[33.333%] min-w-[160px] shrink-0 py-4 px-2 text-center font-bold text-xs md:text-sm tracking-wider uppercase transition-colors duration-300 flex items-center justify-center gap-2 ${activeTab === 'settings' ? 'text-blue-700 bg-blue-50' : 'text-slate-500 hover:text-slate-700 hover:bg-white/60'}`}
                         >
-                            <span className={`transition-all duration-300 ${activeTab === 'settings' ? 'scale-110' : 'scale-100 grayscale opacity-70'}`}>⚙️</span>
-                            Admin Data
+                            <span className={`transition-all duration-300 hidden sm:inline-block ${activeTab === 'settings' ? 'scale-110' : 'scale-100 grayscale opacity-70'}`}>⚙️</span>
+                            <span className="truncate">Admin Data</span>
                         </button>
                     </div>
 

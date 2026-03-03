@@ -3,12 +3,13 @@ import { createPortal } from 'react-dom';
 
 const AdminSettings = () => {
     // --- UI STATE ---
-    const [activeTab, setActiveTab] = useState('identity');
+    const [activeTab] = useState('identity');
     const [toastMessage, setToastMessage] = useState(null);
     const [isEditingProfile, setIsEditingProfile] = useState(false);
     const [isLoadingProfile, setIsLoadingProfile] = useState(true);
     const [copiedId, setCopiedId] = useState(null);
     const toastTimerRef = useRef(null);
+    const [adminTab, setAdminTab] = useState('identity');
 
     // ---> NEW: ABORT CONTROLLER REF <---
     const abortControllerRef = useRef(null);
@@ -259,11 +260,30 @@ const AdminSettings = () => {
                 </div>
             </div>
 
-            {/* TAB NAVIGATION */}
-            <div className="flex gap-4 mb-8">
-                <button onClick={() => setActiveTab('identity')} className={`px-6 py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-all shadow-sm ${activeTab === 'identity' ? 'bg-violet-100 text-violet-700 border border-violet-300' : 'bg-white/60 border border-white hover:border-violet-200 text-slate-500 hover:text-slate-700 hover:bg-white'}`}>🧬 Identity Matrix</button>
-                <button onClick={() => setActiveTab('automation')} className={`px-6 py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-all shadow-sm ${activeTab === 'automation' ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'bg-white/60 border border-white hover:border-blue-200 text-slate-500 hover:text-slate-700 hover:bg-white'}`}>🤖 Automation Hub</button>
-                <button onClick={() => setActiveTab('telemetry')} className={`px-6 py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-all shadow-sm ${activeTab === 'telemetry' ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-white/60 border border-white hover:border-emerald-200 text-slate-500 hover:text-slate-700 hover:bg-white'}`}>📊 System Telemetry</button>
+            {/* The Sub-Tab Container */}
+            <div className="flex overflow-x-auto whitespace-nowrap scrollbar-hide gap-2 md:gap-4 w-full pb-2 mb-6 border-b border-slate-100">
+
+                <button
+                    onClick={() => setAdminTab('identity')}
+                    className={`flex-1 min-w-[140px] shrink-0 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${adminTab === 'identity' ? 'bg-violet-100 text-violet-700 border border-violet-200' : 'bg-slate-50 text-slate-500 hover:bg-slate-100 border border-slate-200'}`}
+                >
+                    🧬 Identity Matrix
+                </button>
+
+                <button
+                    onClick={() => setAdminTab('automation')}
+                    className={`flex-1 min-w-[140px] shrink-0 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${adminTab === 'automation' ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-slate-50 text-slate-500 hover:bg-slate-100 border border-slate-200'}`}
+                >
+                    🤖 Automation Hub
+                </button>
+
+                <button
+                    onClick={() => setAdminTab('telemetry')}
+                    className={`flex-1 min-w-[140px] shrink-0 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${adminTab === 'telemetry' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-slate-50 text-slate-500 hover:bg-slate-100 border border-slate-200'}`}
+                >
+                    📊 System Telemetry
+                </button>
+
             </div>
 
             <div className="bg-white/60 backdrop-blur-xl rounded-[22px] p-8 border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden">
