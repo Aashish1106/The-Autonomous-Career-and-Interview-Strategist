@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import MatchCard from './MatchCard'; // ---> IMPORT YOUR MASTERPIECE <---
+import MatchCard from './MatchCard';
+import InterviewSimulator from './InterviewSimulator'; 
 
 const STAGES = ["Radar", "Queued", "Manual", "Deployed", "Interviewing", "Graveyard"];
 
@@ -10,6 +12,16 @@ export default function KanbanBoard() {
     const [activeMenuId, setActiveMenuId] = useState(null);
     const [selectedJob, setSelectedJob] = useState(null);
 
+    // ---> NEW: SHATTER & SIMULATOR STATE <---
+    const [deletingId, setDeletingId] = useState(null);
+    const [simulatorJob, setSimulatorJob] = useState(null);
+
+    const [toastMessage, setToastMessage] = useState(null);
+    const showToast = (message) => {
+        setToastMessage(message);
+        setTimeout(() => setToastMessage(null), 3000);
+    };
+
     useEffect(() => {
         const handleClickOutside = () => setActiveMenuId(null);
         document.addEventListener('click', handleClickOutside);
@@ -18,6 +30,11 @@ export default function KanbanBoard() {
 
     useEffect(() => {
         fetchJobs();
+
+        // Listen for updates from MatchCard or Simulator
+        const handleVaultUpdate = () => fetchJobs();
+        window.addEventListener('vaultUpdated', handleVaultUpdate);
+        return () => window.removeEventListener('vaultUpdated', handleVaultUpdate);
     }, []);
 
     const fetchJobs = async () => {
@@ -61,6 +78,75 @@ export default function KanbanBoard() {
         }
     };
 
+    // ---> NEW: THE PURGE PROTOCOL <---
+    const handleDelete = async (e, id) => {
+        e.stopPropagation();
+        setActiveMenuId(null);
+
+        // Native confirm acts as our safety lock
+        if (!window.confirm("Commence memory purge? This snapshot will be permanently deleted.")) return;
+
+        setDeletingId(id); // Trigger shatter animation
+
+        try {
+            const response = await fetch(`https://jarvis-ace-api-hbepfjgzhmguhchv.southindia-01.azurewebsites.net/api/JobStrategist/history/${id}`, {
+                method: "DELETE"
+            });
+            if (!response.ok) throw new Error("Failed to delete record");
+
+            setTimeout(() => {
+                setJobs(prev => prev.filter(job => job.id !== id && job.Id !== id));
+                setDeletingId(null);
+                showToast("🗑️ Memory Purged");
+            }, 1000);
+
+        } catch (error) {
+            console.error(error);
+            setDeletingId(null);
+            showToast("🚨 Error deleting record"); 
+        }
+    };
+
+    // ---> NEW: THE SHATTER PHYSICS ENGINE <---
+    const renderShards = (matchScore) => {
+        const shards = [];
+        const cols = 8;
+        const rows = 4;
+
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                const dirX = c - (cols / 2);
+                const dirY = (r - (rows / 2));
+                const force = Math.random() * 60 + 40;
+                const tx = dirX * (force * 0.4) + (Math.random() - 0.5) * 50;
+                const ty = dirY * (force * 0.8) + (Math.random() - 0.5) * 50;
+                const rot = (Math.random() - 0.5) * 720;
+                const delay = (Math.random() * 0.1);
+
+                const colorClass = matchScore >= 85 ? 'border-emerald-400 bg-emerald-100' : matchScore >= 70 ? 'border-amber-400 bg-amber-100' : 'border-rose-400 bg-rose-100';
+
+                shards.push(
+                    <div
+                        key={`${r}-${c}`}
+                        className={`absolute box-border border shadow-sm ${colorClass}`}
+                        style={{
+                            width: `${100 / cols}%`,
+                            height: `${100 / rows}%`,
+                            left: `${(c / cols) * 100}%`,
+                            top: `${(r / rows) * 100}%`,
+                            '--tx': `${tx}px`,
+                            '--ty': `${ty}px`,
+                            '--r': `${rot}deg`,
+                            animation: `premiumShatter 0.7s cubic-bezier(0.1, 1, 0.3, 1) both`,
+                            animationDelay: `${delay}s`,
+                        }}
+                    />
+                );
+            }
+        }
+        return shards;
+    };
+
     const toggleMenu = (e, id) => {
         e.stopPropagation();
         setActiveMenuId(activeMenuId === id ? null : id);
@@ -70,6 +156,12 @@ export default function KanbanBoard() {
         e.stopPropagation();
         setActiveMenuId(null);
         setSelectedJob(job);
+    };
+
+    const launchSimulator = (e, job) => {
+        e.stopPropagation();
+        setActiveMenuId(null);
+        setSimulatorJob(job);
     };
 
     const getScoreColor = (score) => {
@@ -82,6 +174,16 @@ export default function KanbanBoard() {
 
     return (
         <div className="flex h-full overflow-x-auto pb-8 custom-scrollbar gap-6 items-start mt-6 relative">
+            <style>
+                {`
+                    @keyframes premiumShatter {
+                        0% { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); filter: brightness(1); }
+                        15% { opacity: 1; transform: translate(calc(var(--tx) * 0.1), calc(var(--ty) * 0.1)) scale(1.1); filter: brightness(1.2); }
+                        100% { opacity: 0; transform: translate(var(--tx), var(--ty)) rotate(var(--r)) scale(0); filter: brightness(0); }
+                    }
+                `}
+            </style>
+
             <DragDropContext onDragEnd={onDragEnd}>
                 {STAGES.map((stage) => {
                     const safeJobs = Array.isArray(jobs) ? jobs : [];
@@ -99,69 +201,61 @@ export default function KanbanBoard() {
                                     <div ref={provided.innerRef} {...provided.droppableProps} className={`p-4 flex-1 min-h-[500px] transition-colors duration-300 ${snapshot.isDraggingOver ? 'bg-violet-50/50 rounded-b-2xl' : ''}`}>
                                         {columnJobs.map((job, index) => {
                                             const safeId = String(job.id || job.Id || `fallback-${index}`);
+                                            const isDeleting = deletingId === safeId;
+
                                             return (
                                                 <Draggable key={safeId} draggableId={safeId} index={index}>
                                                     {(provided, snapshot) => {
 
-                                                        // ---> THE BUTTER-SMOOTH PHYSICS ENGINE <---
                                                         const getDraggableStyle = (style, snapshot) => {
                                                             if (!style) return {};
-
-                                                            // 1. The Drop Phase: Snappy and satisfying
-                                                            if (snapshot.isDropAnimating) {
-                                                                return {
-                                                                    ...style,
-                                                                    transitionDuration: '0.2s',
-                                                                    transitionTimingFunction: 'cubic-bezier(0.2, 1, 0.1, 1)'
-                                                                };
-                                                            }
-
-                                                            // 2. The Drag Phase: 1:1 mouse tracking with scale/tilt
-                                                            if (snapshot.isDragging) {
-                                                                return {
-                                                                    ...style,
-                                                                    // Append tilt/scale safely to the library's translate coordinates
-                                                                    transform: style.transform ? `${style.transform} scale(1.04) rotate(2deg)` : style.transform,
-                                                                    // FORCE zero transition so it doesn't lag behind the mouse
-                                                                    transition: 'none',
-                                                                    boxShadow: '0 20px 25px -5px rgba(139, 92, 246, 0.25), 0 10px 10px -5px rgba(139, 92, 246, 0.1)',
-                                                                    zIndex: 9999
-                                                                };
-                                                            }
-
-                                                            // 3. Resting Phase
+                                                            if (snapshot.isDropAnimating) return { ...style, transitionDuration: '0.2s', transitionTimingFunction: 'cubic-bezier(0.2, 1, 0.1, 1)' };
+                                                            if (snapshot.isDragging) return { ...style, transform: style.transform ? `${style.transform} scale(1.04) rotate(2deg)` : style.transform, transition: 'none', zIndex: 9999 };
                                                             return style;
                                                         };
 
                                                         return (
                                                             <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
                                                                 style={getDraggableStyle(provided.draggableProps.style, snapshot)}
-                                                                // Removed `transition-all` and Tailwind scale/rotate. 
-                                                                // Only animating colors/shadows now to prevent stutter.
-                                                                className={`relative mb-4 bg-white/90 backdrop-blur-sm border rounded-xl p-4 select-none
-                                                                    transition-[border-color,box-shadow,background-color] duration-200 ease-out
-                                                                    ${snapshot.isDragging
-                                                                        ? 'border-violet-400 bg-white cursor-grabbing'
-                                                                        : 'border-violet-100 hover:border-violet-300 hover:shadow-md cursor-grab'
-                                                                    }`}>
-                                                                <div className="flex justify-between items-start mb-2">
-                                                                    <div className={`px-2 py-1 rounded border text-[10px] font-black font-mono ${getScoreColor(job.matchScore || job.MatchScore)}`}>{job.matchScore || job.MatchScore}% MATCH</div>
-                                                                    <button onClick={(e) => toggleMenu(e, safeId)} className="text-slate-400 hover:text-violet-600 transition-colors p-1 relative z-10">•••</button>
-                                                                </div>
-                                                                <h4 className="text-slate-800 font-bold text-sm leading-tight mb-1 pr-4">{job.roleTitle || job.RoleTitle}</h4>
-                                                                <p className="text-violet-600 text-xs font-mono">{job.companyName || job.CompanyName}</p>
-
-                                                                {activeMenuId === safeId && (
-                                                                    <div className="absolute top-10 right-2 w-48 bg-white border border-violet-100 rounded-lg shadow-xl py-1 z-[100] animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
-                                                                        <button onClick={(e) => openJobDetails(e, job)} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-700 flex items-center gap-3 transition-colors">
-                                                                            <span className="text-violet-500">🔍</span> Open MatchCard
-                                                                        </button>
-                                                                        {job.jobUrl && (
-                                                                            <button onClick={() => window.open(job.jobUrl, '_blank')} className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-700 flex items-center gap-3 transition-colors">
-                                                                                <span className="text-slate-400">🔗</span> View Original Post
-                                                                            </button>
-                                                                        )}
+                                                                className={`relative mb-4 rounded-xl select-none transition-[border-color,box-shadow,background-color] duration-200 ease-out ${activeMenuId === safeId ? 'z-50' : 'z-10'}
+                                                                    ${isDeleting ? 'bg-transparent border-transparent shadow-none' :
+                                                                        snapshot.isDragging ? 'border-violet-400 bg-white shadow-xl cursor-grabbing' : 'bg-white/90 backdrop-blur-sm border border-violet-100 hover:border-violet-300 hover:shadow-md cursor-grab p-4'}`}
+                                                            >
+                                                                {isDeleting ? (
+                                                                    <div className="absolute inset-0 z-50 pointer-events-none w-full h-24">
+                                                                        {renderShards(job.matchScore || job.MatchScore)}
                                                                     </div>
+                                                                ) : (
+                                                                    <>
+                                                                        <div className="flex justify-between items-start mb-2">
+                                                                            <div className={`px-2 py-1 rounded border text-[10px] font-black font-mono ${getScoreColor(job.matchScore || job.MatchScore)}`}>{job.matchScore || job.MatchScore}% MATCH</div>
+                                                                            <div className="relative">
+                                                                                <button onClick={(e) => toggleMenu(e, safeId)} className="text-slate-400 hover:text-violet-600 transition-colors p-1 relative z-10">•••</button>
+
+                                                                                {/* ---> UPGRADED DROPDOWN MENU <--- */}
+                                                                                {activeMenuId === safeId && (
+                                                                                    <div className="absolute top-8 right-0 w-48 bg-white border border-violet-100 rounded-lg shadow-xl py-1 z-[100] animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
+                                                                                        <button onClick={(e) => openJobDetails(e, job)} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-violet-50 hover:text-violet-700 flex items-center gap-3 transition-colors">
+                                                                                            <span className="text-violet-500 text-lg">🔍</span> View MatchCard
+                                                                                        </button>
+                                                                                        <button onClick={(e) => launchSimulator(e, job)} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-3 transition-colors border-t border-slate-50">
+                                                                                            <span className="text-emerald-500 text-lg">🎯</span> Mock Interview
+                                                                                        </button>
+                                                                                        {job.jobUrl && (
+                                                                                            <button onClick={() => window.open(job.jobUrl, '_blank')} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-3 transition-colors border-t border-slate-50">
+                                                                                                <span className="text-blue-400 text-lg">🔗</span> Original Post
+                                                                                            </button>
+                                                                                        )}
+                                                                                        <button onClick={(e) => handleDelete(e, safeId)} className="w-full text-left px-4 py-2.5 text-xs font-black tracking-widest uppercase text-rose-600 hover:bg-rose-50 flex items-center gap-3 transition-colors border-t border-slate-100">
+                                                                                            <span className="text-rose-500 text-lg">🗑️</span> Purge Record
+                                                                                        </button>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                        <h4 className="text-slate-800 font-bold text-sm leading-tight mb-1 pr-4 truncate">{job.roleTitle || job.RoleTitle}</h4>
+                                                                        <p className="text-violet-600 text-xs font-mono truncate">{job.companyName || job.CompanyName}</p>
+                                                                    </>
                                                                 )}
                                                             </div>
                                                         );
@@ -178,32 +272,36 @@ export default function KanbanBoard() {
                 })}
             </DragDropContext>
 
-            {/* ----------------------------------------------------------------- */}
-            {/* ---> THE MODAL WRAPPER FOR MATCHCARD <--- */}
-            {/* ----------------------------------------------------------------- */}
+            {/* ---> MATCHCARD MODAL <--- */}
             {selectedJob && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 lg:p-8 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-200">
-                    <div
-                        className="w-full max-w-5xl h-full max-h-[90vh] flex flex-col relative animate-in zoom-in-95 duration-200"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        {/* A sleek close button floating outside the card */}
+                    <div className="w-full max-w-5xl h-full max-h-[90vh] flex flex-col relative animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
                         <div className="absolute -top-4 -right-4 md:-right-12 z-[250]">
-                            <button
-                                onClick={() => setSelectedJob(null)}
-                                className="bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-500 border border-violet-100 hover:border-rose-200 rounded-full w-10 h-10 flex items-center justify-center shadow-lg transition-all"
-                                title="Close MatchCard"
-                            >
-                                ✕
-                            </button>
+                            <button onClick={() => setSelectedJob(null)} className="bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-500 border border-violet-100 hover:border-rose-200 rounded-full w-10 h-10 flex items-center justify-center shadow-lg transition-all">✕</button>
                         </div>
-
-                        {/* ---> INJECT MATCHCARD HERE <--- */}
                         <MatchCard job={selectedJob} />
-
                     </div>
                 </div>
             )}
+
+            {/* ---> INTERVIEW SIMULATOR MODAL <--- */}
+            {simulatorJob && (
+                <InterviewSimulator
+                    job={simulatorJob}
+                    onClose={() => setSimulatorJob(null)}
+                />
+            )}
+
+            {/* ---> KANBAN TOAST NOTIFICATION HUD <--- */}
+            {toastMessage && createPortal(
+                <div className="fixed bottom-8 right-8 z-[9999] animate-in slide-in-from-bottom-8 fade-in duration-300">
+                    <div className="bg-slate-900/90 backdrop-blur-xl border border-violet-500/50 shadow-[0_0_20px_rgba(139,92,246,0.2)] text-violet-400 px-6 py-4 rounded-xl font-mono text-xs font-bold uppercase tracking-widest flex items-center gap-4">
+                        {toastMessage}
+                    </div>
+                </div>,
+                document.body
+            )}
+
         </div>
     );
 }

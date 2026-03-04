@@ -670,7 +670,7 @@ const MatchCard = ({ job = null }) => {
             {/* ---> INTERVIEW SIMULATOR MODAL <--- */}
             {showSimulator && (
                 <InterviewSimulator
-                    jobData={job || evaluation} // Pass the snapshot if it exists, otherwise pass the live evaluation
+                    job={job || evaluation} // Pass the snapshot if it exists, otherwise pass the live evaluation
                     onClose={() => setShowSimulator(false)}
                 />
             )}

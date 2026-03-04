@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { jsPDF } from "jspdf";
 import { createPortal } from 'react-dom';
 
 const AdminSettings = () => {
     // --- UI STATE ---
-    const [activeTab] = useState('identity');
     const [toastMessage, setToastMessage] = useState(null);
     const [isEditingProfile, setIsEditingProfile] = useState(false);
     const [isLoadingProfile, setIsLoadingProfile] = useState(true);
@@ -62,6 +62,190 @@ const AdminSettings = () => {
         return `${proj.name}\nTechnologies: ${stack}\n${proj.description}`;
     };
 
+    // ---> NEW: REMOVE ITEM FROM ARRAYS <---
+    const removeCollectionItem = (collection, index) => {
+        setResumeData(prev => {
+            const updated = [...prev[collection]];
+            updated.splice(index, 1);
+            return { ...prev, [collection]: updated };
+        });
+    };
+
+    // ---> UPGRADED: ATS-FRIENDLY JSPDF EXPORTER <---
+    const exportToPDF = () => {
+        showToast("⏳ Generating ATS-Friendly PDF...");
+
+        const doc = new jsPDF();
+        let y = 20; // Starting Y coordinate
+        const margin = 20;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const maxLineWidth = pageWidth - (margin * 2);
+
+        // Helper function: If we run out of vertical space, add a new page
+        const checkPageBreak = (addedHeight) => {
+            if (y + addedHeight >= doc.internal.pageSize.getHeight() - 20) {
+                doc.addPage();
+                y = 20;
+            }
+        };
+
+        // 1. HEADER (Name)
+        doc.setFontSize(24);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(15, 23, 42); // Slate 900
+        doc.text(resumeData.fullName || "Neural Identity Profile", margin, y);
+        y += 10;
+
+        // 2. PROFILE SUMMARY
+        if (resumeData.profileSummary) {
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(51, 65, 85); // Slate 700
+            const splitSummary = doc.splitTextToSize(resumeData.profileSummary, maxLineWidth);
+            checkPageBreak(splitSummary.length * 5);
+            doc.text(splitSummary, margin, y);
+            y += (splitSummary.length * 5) + 10;
+        }
+
+        // Helper function for section headers
+        const addSectionHeader = (title) => {
+            checkPageBreak(15);
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(15, 23, 42);
+            doc.text(title.toUpperCase(), margin, y);
+
+            // Draw a subtle underline
+            doc.setDrawColor(226, 232, 240); // Slate 200
+            doc.setLineWidth(0.5);
+            doc.line(margin, y + 2, pageWidth - margin, y + 2);
+            y += 10;
+        };
+
+        // 3. CORE SKILLS
+        if (resumeData.coreSkills) {
+            addSectionHeader("Core Competencies");
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(71, 85, 105);
+            const splitSkills = doc.splitTextToSize(resumeData.coreSkills, maxLineWidth);
+            checkPageBreak(splitSkills.length * 5);
+            doc.text(splitSkills, margin, y);
+            y += (splitSkills.length * 5) + 10;
+        }
+
+        // 4. PROFESSIONAL EXPERIENCE
+        if (resumeData.workExperience?.length > 0) {
+            addSectionHeader("Professional Experience");
+
+            resumeData.workExperience.forEach(job => {
+                checkPageBreak(20);
+
+                // Role & Duration
+                doc.setFontSize(11);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(15, 23, 42);
+                doc.text(job.role || "", margin, y);
+
+                doc.setFontSize(10);
+                doc.setFont("helvetica", "normal");
+                doc.setTextColor(100, 116, 139); // Slate 500
+                const durationText = job.duration || "";
+                // Right-align the date
+                doc.text(durationText, pageWidth - margin - doc.getTextWidth(durationText), y);
+                y += 5;
+
+                // Company
+                doc.setFont("helvetica", "italic");
+                doc.setTextColor(71, 85, 105);
+                doc.text(job.company || "", margin, y);
+                y += 6;
+
+                // Bullets
+                doc.setFont("helvetica", "normal");
+                doc.setTextColor(51, 65, 85);
+                const bullets = Array.isArray(job.bullets) ? job.bullets : (job.bullets ? job.bullets.split('\n') : []);
+
+                bullets.forEach(bullet => {
+                    const cleanBullet = bullet.trim().replace(/^•\s*/, ''); // Strip existing bullets to prevent doubles
+                    if (cleanBullet) {
+                        const splitBullet = doc.splitTextToSize(`• ${cleanBullet}`, maxLineWidth - 5);
+                        checkPageBreak(splitBullet.length * 5);
+                        doc.text(splitBullet, margin + 5, y);
+                        y += (splitBullet.length * 5) + 2;
+                    }
+                });
+                y += 8;
+            });
+        }
+
+        // 5. STRATEGIC PROJECTS
+        if (resumeData.projects?.length > 0) {
+            addSectionHeader("Strategic Projects");
+
+            resumeData.projects.forEach(proj => {
+                checkPageBreak(15);
+                doc.setFontSize(11);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(15, 23, 42);
+                doc.text(proj.name || "", margin, y);
+                y += 5;
+
+                const techStack = Array.isArray(proj.technologies) ? proj.technologies.join(', ') : (proj.technologies || "");
+                if (techStack) {
+                    doc.setFontSize(9);
+                    doc.setFont("helvetica", "italic");
+                    doc.setTextColor(99, 102, 241); // Indigo color for tech stack
+                    const splitTech = doc.splitTextToSize(`Tech Stack: ${techStack}`, maxLineWidth);
+                    checkPageBreak(splitTech.length * 5);
+                    doc.text(splitTech, margin, y);
+                    y += (splitTech.length * 5) + 2;
+                }
+
+                if (proj.description) {
+                    doc.setFontSize(10);
+                    doc.setFont("helvetica", "normal");
+                    doc.setTextColor(51, 65, 85);
+                    const splitDesc = doc.splitTextToSize(proj.description, maxLineWidth);
+                    checkPageBreak(splitDesc.length * 5);
+                    doc.text(splitDesc, margin, y);
+                    y += (splitDesc.length * 5) + 6;
+                }
+            });
+        }
+
+        // 6. EDUCATION
+        if (resumeData.education?.length > 0) {
+            addSectionHeader("Education");
+
+            resumeData.education.forEach(edu => {
+                checkPageBreak(12);
+                doc.setFontSize(11);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(15, 23, 42);
+                doc.text(edu.degree || "", margin, y);
+
+                doc.setFontSize(10);
+                doc.setFont("helvetica", "normal");
+                doc.setTextColor(100, 116, 139);
+                const durationText = edu.duration || "";
+                doc.text(durationText, pageWidth - margin - doc.getTextWidth(durationText), y);
+                y += 5;
+
+                doc.setFont("helvetica", "italic");
+                doc.setTextColor(71, 85, 105);
+                doc.text(edu.institution || "", margin, y);
+                y += 8;
+            });
+        }
+
+        // Save the file cleanly
+        const safeName = (resumeData.fullName || 'ACE_Profile').replace(/\s+/g, '_');
+        doc.save(`${safeName}_Resume.pdf`);
+        showToast("✅ PDF Generated Successfully");
+    };
+
+
     // --- 1. FETCH EXISTING PROFILE ON LOAD (Run Once) ---
     useEffect(() => {
         const fetchProfile = async () => {
@@ -87,7 +271,7 @@ const AdminSettings = () => {
 
     // --- 2. FETCH BOT CONFIG (Run dynamically) ---
     useEffect(() => {
-        if (activeTab === 'automation') {
+        if (adminTab === 'automation') {
             const fetchBotConfig = async () => {
                 try {
                     const response = await fetch("https://jarvis-ace-api-hbepfjgzhmguhchv.southindia-01.azurewebsites.net/api/JobStrategist/bot-config");
@@ -101,7 +285,7 @@ const AdminSettings = () => {
             };
             fetchBotConfig();
         }
-    }, [activeTab]); // <--- DEPENDENCY ARRAY: Runs when the tab changes
+    }, [adminTab]); // <--- DEPENDENCY ARRAY: Runs when the tab changes
 
     // --- TELEMETRY LOGIC ---
     const fetchTelemetry = async () => {
@@ -116,7 +300,7 @@ const AdminSettings = () => {
         }
     };
 
-    useEffect(() => { if (activeTab === 'telemetry') fetchTelemetry(); }, [activeTab]);
+    useEffect(() => { if (adminTab === 'telemetry') fetchTelemetry(); }, [adminTab]);
 
     // --- IDENTITY MATRIX FUNCTIONS ---
     const addExperience = () => setResumeData(prev => ({ ...prev, workExperience: [...prev.workExperience, { company: '', role: '', duration: '', bullets: [''] }] }));
@@ -157,7 +341,6 @@ const AdminSettings = () => {
                 signal: abortControllerRef.current.signal // Attach the kill switch
             });
 
-            // ---> CRITICAL FIX 1: THE CRASH TRAP <---
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(errorText); // Throw it to the catch block below
@@ -167,7 +350,6 @@ const AdminSettings = () => {
             const formattedSkills = Array.isArray(aiData.coreSkills) ? aiData.coreSkills.join(', ') : (aiData.coreSkills || '');
             const formattedCerts = Array.isArray(aiData.certifications) ? aiData.certifications.join('\n') : (aiData.certifications || '');
 
-            // ---> CRITICAL FIX 2: PRESERVE DYNAMIC SECTIONS <---
             setResumeData({
                 ...aiData, // This ensures "Social Engagements" or any custom keys Gemini finds are saved!
                 fullName: aiData.fullName || '',
@@ -186,8 +368,6 @@ const AdminSettings = () => {
                 showToast("🛑 AI Extraction Cancelled");
             } else {
                 console.error("Backend PDF Error:", error.message);
-
-                // Show the ACTUAL C# error to the user so we know why it failed
                 showToast(`🚨 Extraction Failed: ${error.message.substring(0, 50)}...`);
             }
         } finally {
@@ -260,30 +440,35 @@ const AdminSettings = () => {
                 </div>
             </div>
 
-            {/* The Sub-Tab Container */}
-            <div className="flex overflow-x-auto whitespace-nowrap scrollbar-hide gap-2 md:gap-4 w-full pb-2 mb-6 border-b border-slate-100">
+            {/* The Sub-Tab Container - Engineered for Mobile Scrolling & No Overflow */}
+            <div className="w-full max-w-full overflow-hidden mb-6">
+                <div className="flex overflow-x-auto whitespace-nowrap scrollbar-hide gap-2 sm:gap-3 w-full pb-4 border-b border-slate-100 custom-scrollbar">
 
-                <button
-                    onClick={() => setAdminTab('identity')}
-                    className={`flex-1 min-w-[140px] shrink-0 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${adminTab === 'identity' ? 'bg-violet-100 text-violet-700 border border-violet-200' : 'bg-slate-50 text-slate-500 hover:bg-slate-100 border border-slate-200'}`}
-                >
-                    🧬 Identity Matrix
-                </button>
+                    <button
+                        onClick={() => setAdminTab('identity')}
+                        className={`flex-none w-[130px] sm:w-[160px] md:flex-1 md:w-auto px-2 sm:px-4 py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all shadow-sm flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 ${adminTab === 'identity' ? 'bg-violet-100 text-violet-700 border-2 border-violet-300' : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-200'}`}
+                    >
+                        <span className="text-base sm:text-lg">🧬</span>
+                        <span className="w-full truncate text-center md:w-auto">Identity Matrix</span>
+                    </button>
 
-                <button
-                    onClick={() => setAdminTab('automation')}
-                    className={`flex-1 min-w-[140px] shrink-0 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${adminTab === 'automation' ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-slate-50 text-slate-500 hover:bg-slate-100 border border-slate-200'}`}
-                >
-                    🤖 Automation Hub
-                </button>
+                    <button
+                        onClick={() => setAdminTab('automation')}
+                        className={`flex-none w-[130px] sm:w-[160px] md:flex-1 md:w-auto px-2 sm:px-4 py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all shadow-sm flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 ${adminTab === 'automation' ? 'bg-blue-100 text-blue-700 border-2 border-blue-300' : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-200'}`}
+                    >
+                        <span className="text-base sm:text-lg">🤖</span>
+                        <span className="w-full truncate text-center md:w-auto">Automation Hub</span>
+                    </button>
 
-                <button
-                    onClick={() => setAdminTab('telemetry')}
-                    className={`flex-1 min-w-[140px] shrink-0 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${adminTab === 'telemetry' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-slate-50 text-slate-500 hover:bg-slate-100 border border-slate-200'}`}
-                >
-                    📊 System Telemetry
-                </button>
+                    <button
+                        onClick={() => setAdminTab('telemetry')}
+                        className={`flex-none w-[130px] sm:w-[160px] md:flex-1 md:w-auto px-2 sm:px-4 py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all shadow-sm flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 ${adminTab === 'telemetry' ? 'bg-emerald-100 text-emerald-700 border-2 border-emerald-300' : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-200'}`}
+                    >
+                        <span className="text-base sm:text-lg">📊</span>
+                        <span className="w-full truncate text-center md:w-auto">System Telemetry</span>
+                    </button>
 
+                </div>
             </div>
 
             <div className="bg-white/60 backdrop-blur-xl rounded-[22px] p-8 border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden">
@@ -291,7 +476,7 @@ const AdminSettings = () => {
                 {/* ----------------------------------------------------------------- */}
                 {/* TAB 1: IDENTITY MATRIX */}
                 {/* ----------------------------------------------------------------- */}
-                {activeTab === 'identity' && (
+                {adminTab === 'identity' && (
                     <div className="animate-in fade-in zoom-in-95 duration-300">
 
                         {isLoadingProfile ? (
@@ -311,9 +496,24 @@ const AdminSettings = () => {
                                             <span className="bg-violet-50 text-violet-600 border border-violet-200 px-3 py-1 rounded-full">RAG Synced</span>
                                         </div>
                                     </div>
-                                    <button onClick={() => setIsEditingProfile(true)} className="bg-violet-600 hover:bg-violet-700 text-white px-6 py-3 rounded-xl font-black uppercase text-xs transition-all shadow-md hover:-translate-y-0.5 flex items-center gap-2">
-                                        <span>⚙️</span> Edit Neural Identity
-                                    </button>
+
+                                        {/* ---> EXPORT TO PDF BUTTON <--- */}
+                                        <div className="flex flex-wrap gap-3">
+                                            <button
+                                                onClick={exportToPDF}
+                                                // Changed to a beautiful bold Rose/Red color with a nice hover lift!
+                                                className="bg-rose-500 hover:bg-rose-600 text-white px-5 py-3 rounded-xl font-black uppercase text-xs transition-all shadow-md hover:-translate-y-0.5 flex items-center gap-2"
+                                            >
+                                                <span>📄</span> Export to PDF
+                                            </button>
+
+                                            <button
+                                                onClick={() => setIsEditingProfile(true)}
+                                                className="bg-violet-600 hover:bg-violet-700 text-white px-6 py-3 rounded-xl font-black uppercase text-xs transition-all shadow-md hover:-translate-y-0.5 flex items-center gap-2"
+                                            >
+                                                <span>⚙️</span> Edit Neural Identity
+                                            </button>
+                                        </div>
                                 </div>
 
                                 <div className="bg-white p-5 rounded-xl border border-violet-100 shadow-sm group relative">
@@ -510,7 +710,19 @@ const AdminSettings = () => {
                                             </div>
                                             <div className="space-y-4">
                                                 {resumeData.workExperience.map((job, idx) => (
-                                                    <div key={idx} className="bg-white border border-violet-100 rounded-xl p-5 space-y-3 shadow-sm relative">
+                                                    <div key={idx} className="bg-white border border-violet-100 rounded-xl p-5 space-y-3 shadow-sm relative pt-8">
+
+                                                        {/* ---> DELETE BUTTON <--- */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeCollectionItem('workExperience', idx)}
+                                                            disabled={isUploading}
+                                                            className="absolute top-2 right-3 text-slate-400 hover:text-rose-500 text-sm transition-colors"
+                                                            title="Remove Experience"
+                                                        >
+                                                            ✕ Remove
+                                                        </button>
+
                                                         <div className="grid grid-cols-3 gap-3">
                                                             <input placeholder="Role" value={job.role} disabled={isUploading} onChange={(e) => updateCollection('workExperience', idx, 'role', e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:border-violet-400 outline-none disabled:opacity-50" />
                                                             <input placeholder="Company" value={job.company} disabled={isUploading} onChange={(e) => updateCollection('workExperience', idx, 'company', e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-violet-700 focus:border-violet-400 outline-none disabled:opacity-50" />
@@ -530,7 +742,18 @@ const AdminSettings = () => {
                                             </div>
                                             <div className="space-y-4">
                                                 {resumeData.projects.map((proj, idx) => (
-                                                    <div key={idx} className="bg-white border border-blue-100 rounded-xl p-5 space-y-3 shadow-sm">
+                                                    <div key={idx} className="bg-white border border-blue-100 rounded-xl p-5 space-y-3 shadow-sm relative pt-8">
+
+                                                        {/* ---> DELETE BUTTON <--- */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeCollectionItem('projects', idx)}
+                                                            disabled={isUploading}
+                                                            className="absolute top-2 right-3 text-slate-400 hover:text-rose-500 text-sm transition-colors"
+                                                        >
+                                                            ✕ Remove
+                                                        </button>
+
                                                         <input placeholder="Project Name" value={proj.name} disabled={isUploading} onChange={(e) => updateCollection('projects', idx, 'name', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:border-blue-400 outline-none disabled:opacity-50" />
                                                         <input placeholder="Tech Stack (comma separated)" value={Array.isArray(proj.technologies) ? proj.technologies.join(', ') : proj.technologies} disabled={isUploading} onChange={(e) => updateCollection('projects', idx, 'technologies', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-blue-700 focus:border-blue-400 outline-none disabled:opacity-50" />
                                                         <textarea placeholder="Description" value={proj.description} disabled={isUploading} onChange={(e) => updateCollection('projects', idx, 'description', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-slate-700 custom-scrollbar focus:border-blue-400 outline-none disabled:opacity-50" rows="3" />
@@ -547,7 +770,18 @@ const AdminSettings = () => {
                                             </div>
                                             <div className="space-y-4">
                                                 {resumeData.education.map((edu, idx) => (
-                                                    <div key={idx} className="bg-white border border-emerald-100 rounded-xl p-5 space-y-3 shadow-sm">
+                                                    <div key={idx} className="bg-white border border-emerald-100 rounded-xl p-5 space-y-3 shadow-sm relative pt-8">
+
+                                                        {/* ---> DELETE BUTTON <--- */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeCollectionItem('education', idx)}
+                                                            disabled={isUploading}
+                                                            className="absolute top-2 right-3 text-slate-400 hover:text-rose-500 text-sm transition-colors"
+                                                        >
+                                                            ✕ Remove
+                                                        </button>
+
                                                         <div className="grid grid-cols-3 gap-3">
                                                             <input placeholder="Institution" value={edu.institution} disabled={isUploading} onChange={(e) => updateCollection('education', idx, 'institution', e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:border-emerald-400 outline-none disabled:opacity-50" />
                                                             <input placeholder="Degree" value={edu.degree} disabled={isUploading} onChange={(e) => updateCollection('education', idx, 'degree', e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-emerald-700 focus:border-emerald-400 outline-none disabled:opacity-50" />
@@ -625,7 +859,7 @@ const AdminSettings = () => {
                 {/* ----------------------------------------------------------------- */}
                 {/* TAB 2: AUTOMATION HUB */}
                 {/* ----------------------------------------------------------------- */}
-                {activeTab === 'automation' && (
+                {adminTab === 'automation' && (
                     <div className="animate-in fade-in zoom-in-95 duration-300">
                         <div className="mb-8 border-l-4 border-blue-500 pl-4">
                             <h3 className="text-xl font-bold text-slate-800">Selenium Auto-Applier Configuration</h3>
@@ -665,7 +899,7 @@ const AdminSettings = () => {
                 {/* ----------------------------------------------------------------- */}
                 {/* TAB 3: SYSTEM TELEMETRY */}
                 {/* ----------------------------------------------------------------- */}
-                {activeTab === 'telemetry' && (
+                {adminTab === 'telemetry' && (
                     <div className="animate-in fade-in zoom-in-95 duration-300">
                         <div className="flex justify-between items-end mb-8 border-b border-violet-200 pb-4">
                             <div>
