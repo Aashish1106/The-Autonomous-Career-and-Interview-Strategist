@@ -4,7 +4,7 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import MatchCard from './MatchCard';
 import InterviewSimulator from './InterviewSimulator'; 
 
-const BASE_STAGES = ["Queued", "Manual", "Deployed", "Interviewing", "Graveyard"];
+const CORE_STAGES = ["Queued", "Deployed", "Interviewing", "Graveyard"];
 
 export default function KanbanBoard() {
     const [jobs, setJobs] = useState([]);
@@ -172,8 +172,18 @@ export default function KanbanBoard() {
 
     // ---> NEW: DYNAMIC RADAR VISIBILITY <---
     const safeJobs = Array.isArray(jobs) ? jobs : [];
+
+    // Check if we have any jobs in the hidden states
+    const hasManualJobs = safeJobs.some(j => j.pipelineStage === "Manual");
     const hasRadarJobs = safeJobs.some(j => (j.pipelineStage || "Radar") === "Radar");
-    const DISPLAY_STAGES = hasRadarJobs ? [...BASE_STAGES, "Radar"] : BASE_STAGES;
+
+    // Construct the exact order you requested:
+    // Manual (if needed) -> Queued -> Deployed -> Interviewing -> Graveyard -> Radar (if needed)
+    const DISPLAY_STAGES = [
+        ...(hasManualJobs ? ["Manual"] : []),
+        ...CORE_STAGES,
+        ...(hasRadarJobs ? ["Radar"] : [])
+    ];
 
     if (isLoading) return <div className="text-slate-400 animate-pulse text-center mt-20 font-mono">Loading Tactical Pipeline...</div>;
 
