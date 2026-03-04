@@ -5,6 +5,9 @@ using Microsoft.SemanticKernel;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ---> ACE AUTO-INSTALLER: Forces Azure to download Headless Chrome on startup <---
+Microsoft.Playwright.Program.Main(new[] { "install", "chromium" });
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

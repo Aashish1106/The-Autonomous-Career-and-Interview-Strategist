@@ -4,7 +4,7 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import MatchCard from './MatchCard';
 import InterviewSimulator from './InterviewSimulator'; 
 
-const STAGES = ["Radar", "Queued", "Manual", "Deployed", "Interviewing", "Graveyard"];
+const BASE_STAGES = ["Queued", "Manual", "Deployed", "Interviewing", "Graveyard"];
 
 export default function KanbanBoard() {
     const [jobs, setJobs] = useState([]);
@@ -170,6 +170,11 @@ export default function KanbanBoard() {
         return 'text-rose-700 bg-rose-100 border-rose-300';
     };
 
+    // ---> NEW: DYNAMIC RADAR VISIBILITY <---
+    const safeJobs = Array.isArray(jobs) ? jobs : [];
+    const hasRadarJobs = safeJobs.some(j => (j.pipelineStage || "Radar") === "Radar");
+    const DISPLAY_STAGES = hasRadarJobs ? [...BASE_STAGES, "Radar"] : BASE_STAGES;
+
     if (isLoading) return <div className="text-slate-400 animate-pulse text-center mt-20 font-mono">Loading Tactical Pipeline...</div>;
 
     return (
@@ -185,8 +190,8 @@ export default function KanbanBoard() {
             </style>
 
             <DragDropContext onDragEnd={onDragEnd}>
-                {STAGES.map((stage) => {
-                    const safeJobs = Array.isArray(jobs) ? jobs : [];
+                {DISPLAY_STAGES.map((stage) => {
+                    
                     const columnJobs = safeJobs.filter(j => (j.pipelineStage || "Radar") === stage);
 
                     return (
