@@ -1,6 +1,7 @@
 ﻿using AutoJobStrategist.Api.Controllers;
 using AutoJobStrategist.Api.Models;
 using Microsoft.EntityFrameworkCore;
+using Pgvector.EntityFrameworkCore;
 
 namespace AutoJobStrategist.Api.Data
 {
@@ -11,6 +12,7 @@ namespace AutoJobStrategist.Api.Data
         public DbSet<UserProfile> UserProfiles { get; set; }
         public DbSet<JobApplication> JobApplications { get; set; }
         public DbSet<EvaluationHistory> EvaluationHistories { get; set; }
+        public DbSet<ResumeVectorChunk> ResumeVectorChunks { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

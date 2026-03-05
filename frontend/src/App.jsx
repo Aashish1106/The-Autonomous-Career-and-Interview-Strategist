@@ -54,15 +54,24 @@ function App() {
         }
     };
 
-    // ---> ADDED: Recalibration Function <---
     const handleRecalibrate = async () => {
         setIsRecalibrating(true);
         try {
-            // Simulating a 2.5 second heavy math calculation
-            await new Promise(resolve => setTimeout(resolve, 2500));
-            showToast("✅ Vector embeddings successfully recalibrated against your latest profile!");
+            const response = await fetch("https://jarvis-ace-api-hbepfjgzhmguhchv.southindia-01.azurewebsites.net/api/JobStrategist/recalibrate", {
+                method: "POST"
+            });
+
+            if (!response.ok) {
+                // ---> Actually read the error from C# <---
+                const errorText = await response.text();
+                throw new Error(errorText);
+            }
+
+            const data = await response.json();
+            showToast(data.message);
         } catch (error) {
             console.error("Recalibration failed:", error);
+            showToast(`🚨 ${error.message}`);
         } finally {
             setIsRecalibrating(false);
         }

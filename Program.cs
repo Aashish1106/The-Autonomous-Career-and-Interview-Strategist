@@ -48,12 +48,16 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"),
         o => o.UseVector()));
 
-// We only keep the Chat Completion in SK. Embeddings will be handled natively.
+// Temporarily suppress the SK experimental warning for the Google Embedding connector
+#pragma warning disable SKEXP0070 
+
 builder.Services.AddKernel()
     .AddGoogleAIGeminiChatCompletion(
         modelId: "gemini-2.5-flash",
         apiKey: googleApiKey
     );
+
+#pragma warning restore SKEXP0070
 // ----------------------------------------------------------------
 
 var app = builder.Build();

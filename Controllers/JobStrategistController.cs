@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Playwright;
 using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.Embeddings;
 using Pgvector;
 using Pgvector.EntityFrameworkCore;
 using System.Diagnostics;
@@ -11,6 +12,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using UglyToad.PdfPig;
+using System.Net.Http.Json;
 
 namespace AutoJobStrategist.Api.Controllers
 {
@@ -749,10 +751,20 @@ namespace AutoJobStrategist.Api.Controllers
                     record = await _context.EvaluationHistories.FindAsync(request.JobId.Value);
                     if (record == null) return NotFound("Job record not found.");
                     record.UpdatedAt = DateTime.UtcNow;
+
+                    // ---> NEW: If updating an existing job, only overwrite the stage if the frontend passed one
+                    if (!string.IsNullOrWhiteSpace(request.PipelineStage))
+                    {
+                        record.PipelineStage = request.PipelineStage;
+                    }
                 }
                 else
                 {
                     record = new EvaluationHistory { UserId = userId, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow };
+
+                    // ---> NEW: For brand new jobs, use the frontend's instruction, otherwise fallback to "Radar"
+                    record.PipelineStage = !string.IsNullOrWhiteSpace(request.PipelineStage) ? request.PipelineStage : "Radar";
+
                     _context.EvaluationHistories.Add(record);
                 }
 
@@ -983,6 +995,80 @@ namespace AutoJobStrategist.Api.Controllers
                 return StatusCode(500, $"Failed to fetch evaluations: {ex.Message}");
             }
         }
+
+        [HttpPost("recalibrate")]
+        // We ask C# to hand us the configuration so we can grab the API key directly
+        public async Task<IActionResult> RecalibrateVectors([FromServices] IConfiguration config)
+        {
+            var userId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+
+            try
+            {
+                // 1. Your Neural Identity Text
+                string neuralIdentityPayload = @"
+            I am a Senior Full Stack Engineer with 3.3+ years of experience.
+            Expertise in React, Angular, C#, .NET Core, SQL, and Azure.
+            I specialize in building AI Agentic architectures and RAG pipelines.";
+
+                // 2. THE PURGE: Wipe the old vectors to prevent duplicates
+                var oldChunks = await _context.ResumeVectorChunks.Where(c => c.UserId == userId).ToListAsync();
+                if (oldChunks.Any())
+                {
+                    _context.ResumeVectorChunks.RemoveRange(oldChunks);
+                    await _context.SaveChangesAsync();
+                }
+
+                // 3. THE DIRECT GOOGLE STRIKE (Bypassing Semantic Kernel)
+                var apiKey = config["Google:ApiKey"]; // Grab key from appsettings.json
+                var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key={apiKey}";
+
+                using var client = new HttpClient();
+
+                // ---> ADD outputDimensionality = 768 <---
+                var requestBody = new
+                {
+                    model = "models/gemini-embedding-001",
+                    content = new { parts = new[] { new { text = neuralIdentityPayload } } },
+                    outputDimensionality = 768 // Force Google to fit our Postgres schema
+                };
+
+                // Fire the request
+                var response = await client.PostAsJsonAsync(url, requestBody);
+
+                // If Google rejects it now, it will tell us exactly why
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorText = await response.Content.ReadAsStringAsync();
+                    return StatusCode(500, $"Google Direct API Error: {errorText}");
+                }
+
+                // 4. THE EXTRACTION: Parse the 768 math numbers from the JSON response
+                var jsonResponse = await response.Content.ReadFromJsonAsync<JsonElement>();
+                var vectorArray = jsonResponse.GetProperty("embedding")
+                                              .GetProperty("values")
+                                              .EnumerateArray()
+                                              .Select(v => v.GetSingle())
+                                              .ToArray();
+
+                // 5. THE POSTGRES STORAGE
+                var newChunk = new ResumeVectorChunk
+                {
+                    UserId = userId,
+                    ChunkType = "MasterProfile",
+                    Content = neuralIdentityPayload,
+                    Embedding = new Vector(vectorArray) // Convert float[] to pgvector
+                };
+
+                _context.ResumeVectorChunks.Add(newChunk);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { message = "✅ Vector embeddings successfully recalibrated against your latest profile!" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Recalibration failed: {ex.Message}");
+            }
+        }
     }
 
     // ---> ENFORCED DATA CONTRACTS (DTOs) <---
@@ -1116,6 +1202,7 @@ namespace AutoJobStrategist.Api.Controllers
         public string? CoverLetter { get; set; }
         public JsonElement? TailoredSuggestions { get; set; }
         public JsonElement? InterviewHistory { get; set; }
+        public string? PipelineStage { get; set; }
     }
 
     public class UpdateProfileRequest

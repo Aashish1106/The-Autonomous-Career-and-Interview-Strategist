@@ -97,7 +97,12 @@ const MatchCard = ({ job = null }) => {
         }
 
         try {
-            const payload = { JobId: jobId, Url: url, JobDescription: jobText, Evaluation: evaluation, CoverLetter: coverLetter, TailoredSuggestions: tailoredSuggestions };
+            // ---> NEW: The Auto-Routing Logic <---
+            // 1. If it's an existing job, keep its current stage.
+            // 2. If it has a screenshot, it was scraped -> "Queued".
+            // 3. Otherwise, it was manually pasted -> "Manual".
+            const derivedStage = job?.pipelineStage || job?.PipelineStage || (screenshot ? "Queued" : "Manual");
+            const payload = { JobId: jobId, Url: url, JobDescription: jobText, Evaluation: evaluation, CoverLetter: coverLetter, TailoredSuggestions: tailoredSuggestions, PipelineStage: derivedStage };
             const response = await fetch("https://jarvis-ace-api-hbepfjgzhmguhchv.southindia-01.azurewebsites.net/api/JobStrategist/save-history", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
