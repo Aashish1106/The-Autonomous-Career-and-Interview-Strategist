@@ -3,8 +3,9 @@ import { jsPDF } from "jspdf";
 import GenAILoader from './GenAILoader';
 import AgentConsole from './AgentConsole';
 import InterviewSimulator from './InterviewSimulator';
+import WaterfallScroll from './WaterfallScroll';
 
-const MatchCard = ({ job = null }) => {
+const MatchCard = ({ job = null, onClose }) => {
     // --- STATE MANAGEMENT ---
     const [url, setUrl] = useState('');
     const [jobText, setJobText] = useState('');
@@ -353,7 +354,6 @@ const MatchCard = ({ job = null }) => {
 
             doc.setFont("helvetica", "normal");
             doc.setFontSize(11);
-            // Quick regex to strip markdown bolding **
             const cleanContent = content.replace(/\*\*/g, '');
             const splitText = doc.splitTextToSize(cleanContent, 180);
 
@@ -362,7 +362,7 @@ const MatchCard = ({ job = null }) => {
                 doc.text(line, margin, yPos);
                 yPos += 6;
             });
-            yPos += 5; // Bottom padding
+            yPos += 5;
         };
 
         if (coverLetter) printSection("Cover Letter", coverLetter);
@@ -375,7 +375,6 @@ const MatchCard = ({ job = null }) => {
         }
 
         if (customAnswers.length > 0) {
-            // FIXED: Removed the unused 'idx' argument
             customAnswers.forEach((qa) => {
                 printSection(`Q: ${qa.question}`, qa.answer);
             });
@@ -393,7 +392,8 @@ const MatchCard = ({ job = null }) => {
             setCustomAnswers([]); setUrl(''); setUserInstruction(''); setCoachFeedback(null);
             setJobId(null); setLastSavedHash(null); setScreenshot(null); setManualPromptFallback(null);
             setIsDeleting(false);
-        }, 2000);
+            if (onClose) onClose();
+        }, 1500);
     };
 
     // --- RENDER ---
@@ -401,28 +401,38 @@ const MatchCard = ({ job = null }) => {
         <div className="relative group w-full max-w-4xl mx-auto h-full flex flex-col">
 
             {/* The outer glowing ring */}
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-violet-300 via-fuchsia-300 to-indigo-300 rounded-[38px] blur opacity-30 group-hover:opacity-60 transition duration-1000 group-hover:duration-200 animate-pulse"></div>
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-violet-300 via-fuchsia-300 to-indigo-300 rounded-[38px] blur opacity-30 animate-pulse pointer-events-none"></div>
 
             {/* ---> The Main Frame <--- */}
-            <div className="relative bg-white/85 backdrop-blur-2xl rounded-[36px] border border-white/60 shadow-[0_20px_50px_-10px_rgba(139,92,246,0.15)] flex flex-col h-full overflow-hidden">
+            <div className="relative bg-slate-50/90 backdrop-blur-3xl rounded-[36px] border border-white/80 shadow-[0_20px_50px_-10px_rgba(139,92,246,0.15)] flex flex-col h-full overflow-hidden">
 
-                {/* ---> THE INNER SCROLLING VIEWPORT <--- */}
-                <div className="p-8 overflow-y-auto custom-scrollbar flex-1">
-
-                    {/* ---> VAULT HEADER WITH "VIEW ORIGINAL" BUTTON <--- */}
-                    {job && (
-                        <div className="mb-6 flex items-center justify-between bg-violet-50 border border-violet-100 px-5 py-3 rounded-xl shadow-sm">
-                            <div className="flex items-center gap-3">
-                                <span className="w-2.5 h-2.5 rounded-full bg-violet-500 animate-pulse shadow-[0_0_8px_rgba(139,92,246,0.6)]"></span>
-                                <span className="text-violet-800 text-xs font-black uppercase tracking-widest font-mono">Vault Snapshot Loaded</span>
-                            </div>
+                {/* ---> THE HEADER & CLOSE BUTTON (Always visible at the top) <--- */}
+                <div className="px-8 pt-8 pb-4 flex justify-between items-start z-30 relative shrink-0">
+                    {job ? (
+                        <div className="flex items-center gap-3 bg-violet-100/50 border border-violet-200/50 px-5 py-2.5 rounded-xl shadow-sm backdrop-blur-sm">
+                            <span className="w-2.5 h-2.5 rounded-full bg-violet-500 animate-pulse shadow-[0_0_8px_rgba(139,92,246,0.6)]"></span>
+                            <span className="text-violet-800 text-xs font-black uppercase tracking-widest font-mono">Vault Snapshot Loaded</span>
                             {url && (
-                                <a href={url} target="_blank" rel="noopener noreferrer" className="text-[10px] font-black uppercase tracking-widest text-violet-600 hover:text-white bg-white hover:bg-violet-600 border border-violet-200 px-4 py-2 rounded-lg transition-all flex items-center gap-2 shadow-sm">
-                                    <span>🔗</span> View Job Post
+                                <a href={url} target="_blank" rel="noopener noreferrer" className="ml-2 text-[10px] font-black uppercase tracking-widest text-violet-600 hover:text-white bg-white hover:bg-violet-600 border border-violet-200 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 shadow-sm">
+                                    <span>🔗</span> View Post
                                 </a>
                             )}
                         </div>
+                    ) : (
+                        <div className="text-xl font-black tracking-widest uppercase text-slate-300 flex items-center gap-2">
+                            <span className="text-violet-400">⚡</span> ACE Matrix
+                        </div>
                     )}
+
+                    {onClose && (
+                        <button onClick={onClose} className="p-2.5 bg-white border border-slate-200 hover:bg-rose-50 text-slate-400 hover:text-rose-500 hover:border-rose-200 rounded-2xl transition-all shadow-sm active:scale-95">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    )}
+                </div>
+
+                {/* ---> THE WATERFALL SCROLL WRAPPER <--- */}
+                <WaterfallScroll className="px-8 pb-8 pt-2">
 
                     {/* STAGE 1: URL Input & Fetching */}
                     {!job && (
@@ -434,22 +444,13 @@ const MatchCard = ({ job = null }) => {
                                     value={url}
                                     onChange={(e) => setUrl(e.target.value)}
                                     placeholder="https://jobs.company.com/..."
-                                    className="w-full bg-transparent text-slate-800 outline-none text-sm placeholder-slate-400 font-mono"
+                                    className="w-full bg-transparent text-slate-800 outline-none text-sm placeholder-slate-400 font-mono py-1"
                                 />
                             </div>
 
-                            <div className="relative group/btn mt-4">
-                                <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-400 via-indigo-400 to-violet-400 rounded-2xl blur opacity-30 group-hover/btn:opacity-60 transition duration-500"></div>
-                                <button
-                                    onClick={handleFetchData}
-                                    disabled={isFetching || isEvaluating}
-                                    className="relative w-full py-4 bg-violet-600 text-white font-bold uppercase tracking-widest rounded-2xl border border-violet-500 hover:bg-violet-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] shadow-md flex items-center justify-center gap-2"
-                                >
-                                    <span className="group-hover/btn:tracking-wider transition-all duration-300">
-                                        {isFetching ? "Fetching..." : "Fetch Data 🌐"}
-                                    </span>
-                                </button>
-                            </div>
+                            <button onClick={handleFetchData} disabled={isFetching || isEvaluating} className="relative w-full py-4 bg-violet-600 text-white font-bold uppercase tracking-widest rounded-2xl border border-violet-500 hover:bg-violet-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] shadow-md flex items-center justify-center gap-2">
+                                <span>{isFetching ? "Fetching..." : "Fetch Job Data 🌐"}</span>
+                            </button>
                         </div>
                     )}
 
@@ -470,12 +471,12 @@ const MatchCard = ({ job = null }) => {
 
                             {/* SCREENSHOT RENDER */}
                             {screenshot && !job && (
-                                <div className="relative group rounded-2xl overflow-hidden border border-violet-100 shadow-md mb-4 animate-in fade-in slide-in-from-top-4 duration-700">
+                                <div className="relative group rounded-2xl overflow-hidden border border-violet-100 shadow-md mb-4">
                                     <div className="absolute inset-0 bg-gradient-to-t from-slate-900/50 via-slate-900/10 to-transparent z-10 pointer-events-none"></div>
                                     <img src={`data:image/jpeg;base64,${screenshot}`} alt="ACE Target Lock" className="w-full h-48 object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity duration-500" />
                                     <div className="absolute bottom-3 left-4 z-20 flex items-center gap-2">
                                         <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-[pulse_1s_ease-in-out_infinite] shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
-                                        <span className="text-xs font-mono text-emerald-100 font-bold uppercase tracking-widest drop-shadow-md">Target Acquired // Visual Receipt</span>
+                                        <span className="text-xs font-mono text-emerald-100 font-bold uppercase tracking-widest drop-shadow-md">Target Acquired</span>
                                     </div>
                                 </div>
                             )}
@@ -485,8 +486,8 @@ const MatchCard = ({ job = null }) => {
                                 value={jobText}
                                 onChange={(e) => setJobText(e.target.value)}
                                 readOnly={!!job}
-                                placeholder="Raw job description text will appear here. If blocked by WAF, paste manually..."
-                                className={`w-full h-48 bg-violet-50/50 border border-violet-200 rounded-xl p-4 text-slate-700 text-sm focus:outline-none focus:border-violet-400 custom-scrollbar font-mono leading-relaxed mt-4 ${job ? 'opacity-90 cursor-default shadow-inner' : 'shadow-sm'}`}
+                                placeholder="Raw job description text will appear here..."
+                                className={`w-full h-40 bg-white border border-slate-200 rounded-2xl p-5 text-slate-600 text-xs focus:outline-none focus:border-violet-400 custom-scrollbar font-mono leading-relaxed mt-2 ${job ? 'cursor-default shadow-sm' : 'shadow-inner'}`}
                             />
 
                             {/* Evaluate Button */}
@@ -501,16 +502,9 @@ const MatchCard = ({ job = null }) => {
                                         )}
                                     </div>
                                 ) : (
-                                    <div className="relative group/btn mt-4">
-                                        <div className="absolute -inset-0.5 bg-gradient-to-r from-fuchsia-400 via-purple-400 to-pink-400 rounded-2xl blur opacity-30 group-hover/btn:opacity-60 transition duration-500"></div>
-                                        <button
-                                            onClick={handleEvaluate}
-                                            disabled={!jobText}
-                                            className={`relative w-full py-4 font-bold uppercase tracking-widest rounded-2xl border transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 ${!jobText ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed' : 'bg-fuchsia-600 border-fuchsia-500 text-white hover:bg-fuchsia-700 shadow-md'}`}
-                                        >
-                                            <span className="group-hover/btn:tracking-wider transition-all duration-300 flex items-center gap-2">Initialize Evaluation ⚡</span>
-                                        </button>
-                                    </div>
+                                    <button onClick={handleEvaluate} disabled={!jobText} className={`mt-4 w-full py-4 font-bold uppercase tracking-widest rounded-2xl border transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 ${!jobText ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed' : 'bg-fuchsia-600 border-fuchsia-500 text-white hover:bg-fuchsia-700 shadow-md'}`}>
+                                        <span>Initialize Evaluation ⚡</span>
+                                    </button>
                                 )
                             )}
                         </div>
@@ -518,133 +512,96 @@ const MatchCard = ({ job = null }) => {
 
                     {/* STAGE 3: Evaluation Results & Action Bar */}
                     {evaluation && !isEvaluating && !isFetching && !isDeleting && (
-                        <div className="mt-10 animate-in fade-in slide-in-from-bottom-4 duration-700 border-t border-violet-100 pt-10">
-                            <div className="flex flex-col items-center justify-center mb-10 text-center">
-                                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-violet-200 text-xs font-bold text-violet-700 uppercase tracking-widest mb-6 shadow-sm">
+                        <div className="mt-8 animate-in fade-in slide-in-from-bottom-4 duration-700 border-t border-slate-200 pt-8">
+
+                            {/* MATCH SCORE & TITLE */}
+                            <div className="flex flex-col items-center justify-center mb-8 text-center">
+                                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4 shadow-sm">
                                     <span className="text-violet-500">🏢</span> {evaluation.workplaceType}
                                 </div>
-                                <h2 className="text-5xl font-black text-slate-800 tracking-tight mb-3 uppercase drop-shadow-sm">{evaluation.companyName}</h2>
-                                <h3 className="text-2xl font-medium text-violet-600">{evaluation.roleTitle}</h3>
-                            </div>
+                                <h2 className="text-4xl font-black text-slate-800 tracking-tight mb-2 uppercase">{evaluation.companyName}</h2>
+                                <h3 className="text-lg font-bold text-violet-600 mb-8">{evaluation.roleTitle}</h3>
 
-                            <div className="flex flex-col items-center justify-center mb-12">
-                                <div className="relative w-56 h-56 flex items-center justify-center">
+                                <div className="relative w-48 h-48 flex items-center justify-center">
                                     <div className={`absolute inset-0 rounded-full blur-2xl opacity-20 ${evaluation.matchScore >= 80 ? 'bg-emerald-400' : evaluation.matchScore >= 60 ? 'bg-amber-400' : 'bg-rose-400'}`}></div>
                                     <svg className="w-full h-full transform -rotate-90 relative z-10">
-                                        <circle cx="112" cy="112" r="100" className="stroke-slate-100 fill-none" strokeWidth="14" />
+                                        <circle cx="96" cy="96" r="84" className="stroke-white fill-none" strokeWidth="12" />
                                         <circle
-                                            cx="112" cy="112" r="100"
+                                            cx="96" cy="96" r="84"
                                             className={`${getStrokeColor(evaluation.matchScore)} fill-none transition-all duration-1500 ease-out`}
-                                            strokeWidth="14" strokeDasharray="628" strokeDashoffset={628 - (628 * evaluation.matchScore) / 100} strokeLinecap="round"
+                                            strokeWidth="12" strokeDasharray="527" strokeDashoffset={527 - (527 * evaluation.matchScore) / 100} strokeLinecap="round"
                                         />
                                     </svg>
                                     <div className="absolute flex flex-col items-center justify-center text-center z-20">
-                                        <span className={`text-6xl font-black tracking-tighter ${evaluation.matchScore >= 80 ? 'text-emerald-500' : evaluation.matchScore >= 60 ? 'text-amber-500' : 'text-rose-500'}`}>
-                                            {evaluation.matchScore}<span className="text-4xl">%</span>
+                                        <span className={`text-5xl font-black tracking-tighter ${evaluation.matchScore >= 80 ? 'text-emerald-500' : evaluation.matchScore >= 60 ? 'text-amber-500' : 'text-rose-500'}`}>
+                                            {evaluation.matchScore}<span className="text-2xl">%</span>
                                         </span>
-                                        <span className="text-xs text-slate-500 uppercase tracking-widest font-bold mt-2">Semantic Match</span>
+                                        <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mt-1">Match</span>
                                     </div>
                                 </div>
                             </div>
 
-                            {evaluation.gaps && evaluation.gaps.length > 0 && (
-                                <div className="mb-12">
-                                    <h4 className="text-center text-xs font-bold text-slate-400 uppercase tracking-widest mb-5">Identified Gaps</h4>
-                                    <div className="flex flex-wrap justify-center gap-3">
-                                        {evaluation.gaps.map((gap, index) => (
-                                            <span key={index} className="bg-rose-50 border border-rose-200 text-rose-700 text-sm font-medium px-5 py-2.5 rounded-2xl shadow-sm">{gap}</span>
-                                        ))}
+                            {/* --- THE STRATEGIC OVERRIDE BAR (Merged Input + Ask ACE) --- */}
+                            <div className="mb-6 mt-8">
+                                <div className="flex flex-col sm:flex-row gap-3 bg-white border border-violet-200 hover:border-violet-300 rounded-2xl p-2 focus-within:border-violet-400 focus-within:ring-4 focus-within:ring-violet-50 transition-all shadow-sm">
+                                    <div className="flex items-center gap-3 flex-1 px-3">
+                                        <span className="text-violet-400 text-sm">🎯</span>
+                                        <input
+                                            type="text"
+                                            value={userInstruction}
+                                            onChange={(e) => {
+                                                setUserInstruction(e.target.value);
+                                                if (coachFeedback) setCoachFeedback(null);
+                                            }}
+                                            onKeyDown={(e) => e.key === 'Enter' && userInstruction && handleAskACE()}
+                                            placeholder="Command ACE: 'Tailor for AWS' or 'Why am I a fit?'..."
+                                            className="w-full bg-transparent text-slate-700 outline-none text-sm placeholder-slate-400 font-mono py-2"
+                                        />
                                     </div>
-                                </div>
-                            )}
-
-                            <div className="mb-8">
-                                <div className={`w-full py-5 rounded-2xl flex flex-col items-center justify-center gap-2 border border-dashed relative overflow-hidden ${evaluation.matchScore >= 80 ? 'bg-emerald-50 text-emerald-700 border-emerald-300' :
-                                    evaluation.matchScore >= 60 ? 'bg-amber-50 text-amber-700 border-amber-300' :
-                                        'bg-rose-50 text-rose-700 border-rose-300'
-                                    }`}>
-                                    <span className="text-[10px] font-black opacity-70 tracking-[0.3em] uppercase">ACE Final Verdict</span>
-                                    <span className="text-lg font-black uppercase tracking-widest">
-                                        {evaluation.matchScore >= 80 ? '🟢 High Match: Proceed to Apply' :
-                                            evaluation.matchScore >= 60 ? '🟡 Moderate Match: Tailor Heavily' :
-                                                '🔴 Low Match: Pass on this Role'}
-                                    </span>
-                                    <span className="text-xs font-serif mt-1 max-w-lg text-center leading-relaxed">
-                                        "{evaluation.action}"
-                                    </span>
+                                    <button
+                                        onClick={handleAskACE}
+                                        disabled={isAsking || !userInstruction}
+                                        className="py-3 px-6 bg-indigo-600 text-white font-bold uppercase tracking-widest text-[10px] rounded-xl hover:bg-indigo-700 transition-all duration-300 active:scale-[0.98] flex items-center justify-center shadow-sm gap-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                    >
+                                        {isAsking ? "Thinking..." : "🧠 Ask ACE"}
+                                    </button>
                                 </div>
                             </div>
 
-                            {/* --- GATEKEEPER UI INTERVENTION --- */}
-                            {coachFeedback && (
-                                <div className="mb-4 p-5 rounded-2xl bg-amber-50 border border-amber-200 shadow-sm animate-in slide-in-from-top-4 fade-in duration-500 flex items-start gap-4">
-                                    <span className="text-amber-500 text-2xl mt-1 animate-pulse">💡</span>
-                                    <div>
-                                        <h4 className="text-amber-700 font-bold text-[11px] uppercase tracking-widest mb-1.5 flex items-center gap-2">
-                                            ACE Strategic Override
-                                            <span className="bg-amber-100 text-amber-800 text-[9px] px-2 py-0.5 rounded-full border border-amber-200">Action Paused</span>
-                                        </h4>
-                                        <p className="text-amber-800 text-sm font-serif leading-relaxed">{coachFeedback}</p>
-                                    </div>
-                                </div>
-                            )}
+                            {/* --- PRIMARY CORE TOOLS --- */}
+                            <div className="grid grid-cols-2 gap-4 w-full mb-4">
+                                <button onClick={handleTailorResume} disabled={isTailoring} className="py-4 bg-white text-fuchsia-600 font-black uppercase tracking-widest rounded-2xl border border-fuchsia-200 hover:bg-fuchsia-50 hover:border-fuchsia-300 transition-all duration-300 active:scale-[0.98] flex items-center justify-center shadow-sm gap-2 text-xs">
+                                    {isTailoring ? "Processing..." : "✨ Auto-Tailor Resume"}
+                                </button>
 
-                            {/* --- THE STRATEGIC OVERRIDE BAR --- */}
-                            <div className="mb-5 mt-8">
-                                <div className="flex items-center gap-3 bg-white border border-violet-200 hover:border-violet-300 rounded-2xl p-3 px-5 focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-100 transition-all shadow-sm">
-                                    <span className="text-violet-400 text-sm">🎯</span>
-                                    <input
-                                        type="text"
-                                        value={userInstruction}
-                                        onChange={(e) => {
-                                            setUserInstruction(e.target.value);
-                                            if (coachFeedback) setCoachFeedback(null);
-                                        }}
-                                        placeholder="Command ACE: 'Tailor resume for AWS' OR 'Why am I a fit for this role?'..."
-                                        className="w-full bg-transparent text-slate-700 outline-none text-sm placeholder-slate-400 font-mono"
-                                    />
-                                </div>
+                                <button onClick={handleGenerateLetter} disabled={isGeneratingLetter} className="py-4 bg-white text-teal-600 font-black uppercase tracking-widest rounded-2xl border border-teal-200 hover:bg-teal-50 hover:border-teal-300 transition-all duration-300 active:scale-[0.98] flex items-center justify-center shadow-sm gap-2 text-xs">
+                                    {isGeneratingLetter ? "Drafting..." : "📝 Generate Cover Letter"}
+                                </button>
                             </div>
 
-                            {/* --- ACTION BUTTONS GRID --- */}
-                            <div className="grid grid-cols-2 gap-4 w-full mb-10">
-                                <button onClick={() => setShowSimulator(true)} className="col-span-2 relative w-full py-4 bg-violet-600 text-white font-black uppercase tracking-widest rounded-2xl border border-violet-500 hover:bg-violet-700 transition-all duration-300 active:scale-[0.98] flex items-center justify-center shadow-md gap-3">
-                                    <span className="text-2xl drop-shadow-sm animate-pulse">🤖</span> Start Mock Interview
+                            {/* --- SECONDARY UTILITY TOOLS --- */}
+                            <div className={`grid ${job ? 'grid-cols-2' : 'grid-cols-3'} gap-3 w-full mb-10`}>
+                                <button onClick={() => setShowSimulator(true)} className="py-3 bg-violet-50 text-violet-700 font-bold uppercase tracking-widest text-[9px] rounded-xl border border-violet-100 hover:bg-violet-100 hover:border-violet-200 transition-all duration-300 active:scale-[0.98] flex flex-col sm:flex-row items-center justify-center shadow-sm gap-2">
+                                    <span className="text-lg">🤖</span> Mock Interview
                                 </button>
 
-                                <button onClick={handleTailorResume} disabled={isTailoring} className="py-4 bg-white text-fuchsia-600 font-bold uppercase tracking-widest rounded-2xl border border-fuchsia-200 hover:bg-fuchsia-50 transition-all duration-300 active:scale-[0.98] flex items-center justify-center shadow-sm gap-2">
-                                    {isTailoring ? "..." : "✨ Tailor Resume"}
+                                <button onClick={handleSaveToHistory} className="py-3 bg-blue-50 text-blue-700 font-bold uppercase tracking-widest text-[9px] rounded-xl border border-blue-100 hover:bg-blue-100 hover:border-blue-200 transition-all duration-300 active:scale-[0.98] flex flex-col sm:flex-row items-center justify-center shadow-sm gap-2">
+                                    <span className="text-lg">💾</span> Save in Vault
                                 </button>
 
-                                <button onClick={handleGenerateLetter} disabled={isGeneratingLetter} className="py-4 bg-white text-teal-600 font-bold uppercase tracking-widest rounded-2xl border border-teal-200 hover:bg-teal-50 transition-all duration-300 active:scale-[0.98] flex items-center justify-center shadow-sm gap-2">
-                                    {isGeneratingLetter ? "..." : "📝 Write Letter"}
-                                </button>
-
-                                <button onClick={handleAskACE} disabled={isAsking || !userInstruction} className="col-span-2 py-4 bg-indigo-50 text-indigo-700 font-bold uppercase tracking-widest rounded-2xl border border-indigo-200 hover:bg-indigo-100 transition-all duration-300 active:scale-[0.98] flex items-center justify-center shadow-sm gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                                    {isAsking ? "Processing..." : "🧠 Ask ACE / Generate Q&A"}
-                                </button>
-
-                                <button onClick={handleExportPDF} className="py-4 bg-slate-800 text-white font-bold uppercase tracking-widest rounded-2xl hover:bg-slate-900 transition-all duration-300 active:scale-[0.98] flex items-center justify-center shadow-sm gap-2">
-                                    📄 Export PDF Kit
-                                </button>
-
-                                <button onClick={handleSaveToHistory} className="py-4 bg-blue-50 text-blue-700 font-bold uppercase tracking-widest rounded-2xl border border-blue-200 hover:bg-blue-100 transition-all duration-300 active:scale-[0.98] flex items-center justify-center shadow-sm gap-2">
-                                    💾 Save Snapshot
-                                </button>
-
-                                {/* ---> RESTORED: CLEAR SCREEN BUTTON <--- */}
-                                <button onClick={handleDelete} className="col-span-2 py-4 bg-rose-50 text-rose-600 font-bold uppercase tracking-widest rounded-2xl border border-rose-200 hover:bg-rose-100 transition-all duration-300 active:scale-[0.98] flex items-center justify-center shadow-sm gap-2">
-                                    🧹 Clear Matrix Data
-                                </button>
+                                {!job && (
+                                    <button onClick={handleDelete} className="py-3 bg-rose-50 text-rose-600 font-bold uppercase tracking-widest text-[9px] rounded-xl border border-rose-100 hover:bg-rose-100 hover:border-rose-200 transition-all duration-300 active:scale-[0.98] flex flex-col sm:flex-row items-center justify-center shadow-sm gap-2">
+                                        <span className="text-lg">🧹</span> Clear Screen
+                                    </button>
+                                )}
                             </div>
 
                             {/* ---> TOKEN EXHAUSTION FALLBACK <--- */}
                             {manualPromptFallback && (
                                 <div className="mb-8 p-6 rounded-2xl bg-amber-50 border border-amber-200 shadow-sm animate-in slide-in-from-top-4 fade-in duration-500">
                                     <h4 className="text-amber-800 font-bold text-xs uppercase tracking-widest mb-3 flex items-center gap-2">
-                                        ⚠️ Google API Quota Reached: Manual Override
+                                        ⚠️ API Quota Reached: Manual Override
                                     </h4>
-                                    <p className="text-amber-700 text-sm mb-4">Paste this prompt directly into Google Gemini to continue your session:</p>
                                     <textarea readOnly value={manualPromptFallback} className="w-full h-32 bg-white border border-amber-200 rounded-xl p-3 text-sm text-slate-600 font-mono mb-3" />
                                     <button onClick={() => { navigator.clipboard.writeText(manualPromptFallback); showToast("Fallback Prompt Copied"); }} className="bg-amber-600 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest">
                                         Copy Prompt
@@ -652,15 +609,39 @@ const MatchCard = ({ job = null }) => {
                                 </div>
                             )}
 
-                            {/* ---> CUSTOM ANSWERS DISPLAY <--- */}
+                            {/* ---> ARTIFACTS SECTION HEADER & EXPORT UTILITY <--- */}
+                            {(customAnswers.length > 0 || tailoredSuggestions || coverLetter) && (
+                                <div className="flex justify-between items-end mb-6 pb-3 border-b border-slate-200 mt-12">
+                                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Generated Intelligence</h3>
+                                    <button onClick={handleExportPDF} className="text-[10px] font-bold text-slate-600 hover:text-slate-900 uppercase tracking-widest bg-white px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors flex items-center gap-2 shadow-sm active:scale-95">
+                                        <span>📄</span> Export Kit to PDF
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* CUSTOM ANSWERS DISPLAY */}
                             {customAnswers.length > 0 && (
-                                <div className="space-y-6 mb-8">
-                                    <h4 className="text-lg font-black text-slate-800 flex items-center gap-3 tracking-wide uppercase border-b border-slate-100 pb-2">
-                                        <span className="bg-indigo-100 p-2 rounded-2xl text-indigo-600">🧠</span> Strategic Intelligence
-                                    </h4>
+                                <div className="space-y-4 mb-8">
                                     {customAnswers.map((qa, idx) => (
-                                        <div key={idx} className="bg-white border border-indigo-100 p-6 rounded-2xl shadow-sm relative group">
-                                            <p className="text-indigo-800 font-bold text-sm mb-3">Q: {qa.question}</p>
+                                        <div key={idx} className="bg-white border border-indigo-100 p-6 rounded-2xl shadow-sm relative group/qa transition-all duration-300">
+
+                                            <div className="flex justify-between items-start mb-3 border-b border-indigo-50 pb-2">
+                                                <p className="text-indigo-800 font-bold text-xs uppercase tracking-widest pr-4 leading-relaxed">
+                                                    Q: {qa.question}
+                                                </p>
+
+                                                <button
+                                                    onClick={() => {
+                                                        navigator.clipboard.writeText(qa.answer);
+                                                        showToast("Answer Copied");
+                                                    }}
+                                                    className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border bg-white text-slate-500 border-slate-200 hover:bg-slate-100 opacity-0 group-hover/qa:opacity-100 transition-all duration-200 shrink-0"
+                                                    title="Copy Answer"
+                                                >
+                                                    Copy
+                                                </button>
+                                            </div>
+
                                             <p className="text-slate-600 text-sm font-serif leading-relaxed whitespace-pre-wrap">{qa.answer}</p>
                                         </div>
                                     ))}
@@ -669,99 +650,77 @@ const MatchCard = ({ job = null }) => {
 
                             {/* TAILORED SUGGESTIONS */}
                             {tailoredSuggestions && Array.isArray(tailoredSuggestions) && (
-                                <div className="relative z-10 mt-10 animate-in fade-in slide-in-from-top-4 duration-700">
-                                    <div className="flex justify-between items-center mb-6">
-                                        <h4 className="text-lg font-black text-slate-800 flex items-center gap-3 tracking-wide uppercase">
-                                            <span className="bg-violet-100 p-2 rounded-2xl text-violet-600 border border-violet-200">✨</span> AI Editorial Strategy
-                                        </h4>
-                                    </div>
-                                    <div className="space-y-8">
-                                        {tailoredSuggestions.map((suggestion, index) => (
-                                            <div key={index} className="bg-white border border-violet-100 p-6 rounded-2xl shadow-md relative overflow-hidden group">
-                                                <div className="mb-6">
-                                                    <span className="text-[10px] font-black tracking-widest text-slate-400 uppercase flex items-center gap-2 mb-2">
-                                                        <span className="w-1.5 h-1.5 rounded-full bg-rose-400"></span> Original Profile
-                                                    </span>
-                                                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 text-slate-500 text-sm leading-relaxed line-through decoration-rose-300 font-serif">
-                                                        {suggestion.original_bullet}
-                                                    </div>
-                                                </div>
-                                                <div className="space-y-4">
-                                                    <span className="text-[10px] font-black tracking-widest text-violet-500 uppercase flex items-center gap-2">
-                                                        <span>🔄</span> Generated Options
-                                                    </span>
-                                                    {suggestion.variations && suggestion.variations.map((variation, vIndex) => {
-                                                        const isBest = vIndex === suggestion.best_variation_index;
-                                                        return (
-                                                            <div key={vIndex} className={`p-4 rounded-2xl border relative transition-all duration-300 group/copy ${isBest ? 'bg-emerald-50 border-emerald-200 shadow-[inset_0_0_15px_rgba(16,185,129,0.05)]' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
-                                                                {isBest && (
-                                                                    <div className="absolute -top-3 -right-2 bg-emerald-500 text-white text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-sm z-10">ACE Top Pick ⭐</div>
-                                                                )}
-                                                                <div className="flex justify-between items-start mb-2">
-                                                                    <div className={`text-[10px] font-bold uppercase tracking-wider ${isBest ? 'text-emerald-700' : 'text-slate-500'}`}>
-                                                                        Focus: {variation.focus}
-                                                                    </div>
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            navigator.clipboard.writeText(variation.text);
-                                                                            showToast(`Copied: ${variation.focus} Variation`);
-                                                                        }}
-                                                                        className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border transition-all duration-200 opacity-0 group-hover/copy:opacity-100 ${isBest ? 'bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'}`}
-                                                                        title="Copy this bullet to clipboard"
-                                                                    >
-                                                                        Copy
-                                                                    </button>
-                                                                </div>
-                                                                <div className={`text-sm leading-relaxed font-serif ${isBest ? 'text-emerald-900' : 'text-slate-700'}`}>
-                                                                    {variation.text}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                                <div className="mt-6 pt-5 border-t border-violet-100">
-                                                    <span className="text-[10px] font-black tracking-widest text-violet-500 uppercase mb-2 flex items-center gap-2">
-                                                        <span>🧠</span> Why ACE chose Option {(suggestion.best_variation_index ?? suggestion.bestVariationIndex ?? suggestion.BestVariationIndex ?? 0) + 1}
-                                                    </span>
-                                                    <p className="text-slate-600 text-sm leading-relaxed italic border-l-2 border-violet-300 pl-4">
-                                                        {suggestion.ACE_reasoning || suggestion.aceReasoning || suggestion.AceReasoning || suggestion.reasoning || suggestion.jarvis_reasoning || suggestion.jarvisReasoning || "Optimized mathematically for maximum semantic overlap with the core target requirements."}
-                                                    </p>
+                                <div className="space-y-6 mb-8">
+                                    {tailoredSuggestions.map((suggestion, index) => (
+                                        <div key={index} className="bg-white border border-violet-100 p-6 rounded-2xl shadow-sm relative overflow-hidden group">
+                                            <div className="mb-4">
+                                                <span className="text-[9px] font-black tracking-widest text-slate-400 uppercase flex items-center gap-2 mb-2">
+                                                    <span className="w-1 h-1 rounded-full bg-rose-400"></span> Original Bullet
+                                                </span>
+                                                <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 text-slate-400 text-sm line-through decoration-rose-200 font-serif">
+                                                    {suggestion.original_bullet}
                                                 </div>
                                             </div>
-                                        ))}
-                                    </div>
+                                            <div className="space-y-3">
+                                                <span className="text-[9px] font-black tracking-widest text-violet-500 uppercase flex items-center gap-2">
+                                                    <span>🔄</span> Generated Options
+                                                </span>
+                                                {suggestion.variations && suggestion.variations.map((variation, vIndex) => {
+                                                    const isBest = vIndex === suggestion.best_variation_index;
+                                                    return (
+                                                        <div key={vIndex} className={`p-4 rounded-xl border relative transition-all duration-300 group/copy ${isBest ? 'bg-emerald-50 border-emerald-200 shadow-inner' : 'bg-white border-slate-200'}`}>
+                                                            {isBest && (
+                                                                <div className="absolute -top-2.5 -right-2 bg-emerald-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest shadow-sm">Top Pick</div>
+                                                            )}
+                                                            <div className="flex justify-between items-start mb-2">
+                                                                <div className={`text-[9px] font-bold uppercase tracking-wider ${isBest ? 'text-emerald-700' : 'text-slate-500'}`}>
+                                                                    Focus: {variation.focus}
+                                                                </div>
+                                                                <button onClick={() => { navigator.clipboard.writeText(variation.text); showToast("Copied"); }} className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border bg-white text-slate-500 border-slate-200 hover:bg-slate-100 opacity-0 group-hover/copy:opacity-100 transition-all">Copy</button>
+                                                            </div>
+                                                            <div className={`text-sm leading-relaxed font-serif ${isBest ? 'text-emerald-900' : 'text-slate-700'}`}>
+                                                                {variation.text}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
 
                             {/* COVER LETTER */}
                             {coverLetter && (
-                                <div className="relative z-10 mt-8 pt-6 border-t border-violet-100 animate-in fade-in slide-in-from-top-4 duration-700">
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                                            <span className="bg-teal-100 p-1.5 rounded-lg text-teal-600">📝</span> Tailored Cover Letter
+                                <div className="bg-white border border-teal-100 p-6 rounded-2xl shadow-sm mb-8 relative group/letter transition-all duration-300">
+                                    <div className="flex justify-between items-center mb-4 border-b border-teal-50 pb-2">
+                                        <h4 className="text-[10px] font-black uppercase tracking-widest text-teal-600 flex items-center gap-2">
+                                            <span>📝</span> Tailored Cover Letter
                                         </h4>
-                                        <div className="flex gap-3">
-                                            <button onClick={() => { navigator.clipboard.writeText(coverLetter); showToast("Cover Letter Copied to Clipboard"); }} className="text-xs font-bold text-teal-600 hover:text-teal-700 uppercase tracking-widest bg-teal-50 px-3 py-1.5 rounded-lg border border-teal-200 hover:bg-teal-100 transition-colors">
-                                                Copy Text
-                                            </button>
-                                        </div>
+                                        <button
+                                            onClick={() => { navigator.clipboard.writeText(coverLetter); showToast("Copied to Clipboard"); }}
+                                            className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border bg-white text-slate-500 border-slate-200 hover:bg-slate-100 opacity-0 group-hover/letter:opacity-100 transition-all duration-200"
+                                        >
+                                            Copy
+                                        </button>
                                     </div>
-                                    <div className="bg-white border border-violet-200 p-6 rounded-2xl whitespace-pre-wrap text-slate-700 text-sm leading-relaxed font-serif shadow-sm">{coverLetter}</div>
+                                    <div className="whitespace-pre-wrap text-slate-700 text-sm leading-relaxed font-serif">{coverLetter}</div>
                                 </div>
                             )}
+
                         </div>
                     )}
-                </div>
+                </WaterfallScroll>
             </div>
 
             {/* TOAST HUD */}
             {toastMessage && (
                 <div className="fixed bottom-8 right-8 z-[100] animate-in slide-in-from-bottom-8 fade-in duration-300">
-                    <div className="bg-white/90 backdrop-blur-xl border border-emerald-200 shadow-lg text-emerald-700 px-6 py-4 rounded-2xl font-mono text-xs font-bold uppercase tracking-widest flex items-center gap-4">
-                        <div className="relative flex h-2.5 w-2.5">
+                    <div className="bg-slate-900/95 backdrop-blur-xl border border-slate-700 shadow-2xl text-emerald-400 px-6 py-4 rounded-2xl font-mono text-xs font-bold uppercase tracking-widest flex items-center gap-4">
+                        <span className="relative flex h-2 w-2">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-sm"></span>
-                        </div>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
                         {toastMessage}
                     </div>
                 </div>

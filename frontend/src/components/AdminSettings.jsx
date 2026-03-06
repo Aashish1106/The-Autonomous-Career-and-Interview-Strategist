@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { jsPDF } from "jspdf";
 import { createPortal } from 'react-dom';
+import WaterfallScroll from './WaterfallScroll';
 
 const AdminSettings = () => {
     // --- UI STATE ---
@@ -483,170 +484,239 @@ const AdminSettings = () => {
                             <div className="text-center py-20 text-violet-400 font-mono animate-pulse">Fetching Master Profile...</div>
                         ) : !isEditingProfile ? (
 
-                            /* ---> READ-ONLY DASHBOARD VIEW <--- */
-                            <div className="space-y-10 animate-in slide-in-from-left-4 duration-500">
-                                <div className="flex justify-between items-start border-b border-violet-100 pb-6">
-                                    <div>
-                                        <h3 className="text-3xl font-black text-slate-800 uppercase tracking-widest mb-2 flex items-center gap-3">
-                                            {resumeData.fullName || 'No Name Provided'}
-                                            <button onClick={() => handleCopyText(resumeData.fullName, 'name')} className="text-slate-400 hover:text-violet-600 transition-colors text-lg" title="Copy Name">{copiedId === 'name' ? '✅' : '📋'}</button>
-                                        </h3>
-                                        <div className="flex gap-2 text-xs font-mono">
-                                            <span className="bg-emerald-50 text-emerald-600 border border-emerald-200 px-3 py-1 rounded-full">Vector Embedded</span>
-                                            <span className="bg-violet-50 text-violet-600 border border-violet-200 px-3 py-1 rounded-full">RAG Synced</span>
-                                        </div>
-                                    </div>
+                                /* ---> READ-ONLY DASHBOARD VIEW <--- */
+                                <div className="space-y-8 animate-in slide-in-from-left-4 duration-500">
 
-                                        {/* ---> EXPORT TO PDF BUTTON <--- */}
-                                        <div className="flex flex-wrap gap-3">
+                                    {/* 1. THE REDESIGNED HEADER */}
+                                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-violet-100 pb-6 gap-6">
+                                        <div className="relative group/name">
+                                            <h3 className="text-3xl font-black text-slate-800 uppercase tracking-widest mb-3 flex items-center gap-3">
+                                                {resumeData.fullName || 'No Name Provided'}
+
+                                                {/* Stealth Copy Button for Name */}
+                                                <button
+                                                    onClick={() => handleCopyText(resumeData.fullName, 'name')}
+                                                    className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border bg-white text-slate-500 border-slate-200 hover:bg-slate-100 opacity-0 group-hover/name:opacity-100 transition-all duration-200"
+                                                >
+                                                    {copiedId === 'name' ? 'Copied' : 'Copy'}
+                                                </button>
+                                            </h3>
+                                            <div className="flex flex-wrap gap-2 text-xs font-mono">
+                                                <span className="bg-emerald-50 text-emerald-600 border border-emerald-200 px-3 py-1 rounded-full">Vector Embedded</span>
+                                                <span className="bg-violet-50 text-violet-600 border border-violet-200 px-3 py-1 rounded-full">RAG Synced</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Sleek Action Buttons */}
+                                        <div className="flex flex-col sm:flex-row w-full md:w-auto gap-3">
                                             <button
                                                 onClick={exportToPDF}
-                                                // Changed to a beautiful bold Rose/Red color with a nice hover lift!
-                                                className="bg-rose-500 hover:bg-rose-600 text-white px-5 py-3 rounded-xl font-black uppercase text-xs transition-all shadow-md hover:-translate-y-0.5 flex items-center gap-2"
+                                                className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-6 py-3 rounded-xl font-bold uppercase tracking-widest text-[10px] transition-all shadow-sm hover:shadow flex items-center justify-center gap-2"
                                             >
-                                                <span>📄</span> Export to PDF
+                                                <span>📄</span> Export PDF
                                             </button>
 
                                             <button
                                                 onClick={() => setIsEditingProfile(true)}
-                                                className="bg-violet-600 hover:bg-violet-700 text-white px-6 py-3 rounded-xl font-black uppercase text-xs transition-all shadow-md hover:-translate-y-0.5 flex items-center gap-2"
+                                                className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold uppercase tracking-widest text-[10px] transition-all shadow-sm hover:shadow flex items-center justify-center gap-2"
                                             >
-                                                <span>⚙️</span> Edit Neural Identity
+                                                <span>⚙️</span> Edit Identity
                                             </button>
                                         </div>
-                                </div>
-
-                                <div className="bg-white p-5 rounded-xl border border-violet-100 shadow-sm group relative">
-                                    <div className="flex justify-between items-start mb-3">
-                                        <h4 className="text-[10px] font-black text-violet-600 uppercase tracking-widest flex items-center gap-2"><span>🎯</span> Profile Summary</h4>
-                                        <button onClick={() => handleCopyText(resumeData.profileSummary, 'summary')} className="text-slate-400 hover:text-violet-600 transition-colors text-sm">{copiedId === 'summary' ? '✅' : '📋'}</button>
                                     </div>
-                                    <p className="text-slate-700 text-sm font-serif leading-relaxed">{resumeData.profileSummary || 'No summary provided.'}</p>
-                                </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <div className="bg-white p-5 rounded-xl border border-emerald-100 shadow-sm">
-                                        <div className="flex justify-between items-start mb-3">
-                                            <h4 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-2"><span>💻</span> Core Skills</h4>
-                                            <button onClick={() => handleCopyText(resumeData.coreSkills, 'skills')} className="text-slate-400 hover:text-emerald-600 transition-colors text-sm">{copiedId === 'skills' ? '✅' : '📋'}</button>
-                                        </div>
-                                        <div className="flex flex-wrap gap-2">
-                                            {resumeData.coreSkills ? resumeData.coreSkills.split(',').map((skill, idx) => (
-                                                <span key={idx} className="bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg text-xs border border-emerald-200 shadow-sm">{skill.trim()}</span>
-                                            )) : <span className="text-slate-400 text-sm italic">No skills listed.</span>}
-                                        </div>
-                                    </div>
-                                    <div className="bg-white p-5 rounded-xl border border-blue-100 shadow-sm flex flex-col">
-                                        <div className="flex justify-between items-start mb-3">
-                                            <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-2"><span>📜</span> Certifications</h4>
-                                            <button onClick={() => handleCopyText(resumeData.certifications, 'certs')} className="text-slate-400 hover:text-blue-600 transition-colors text-sm">{copiedId === 'certs' ? '✅' : '📋'}</button>
-                                        </div>
-                                        <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
-                                            {resumeData.certifications ? (
-                                                <ul className="space-y-2">
-                                                    {resumeData.certifications.split(/[\n•*]/).filter(c => c.trim() !== '').map((cert, idx) => (
-                                                        <li key={idx} className="text-slate-700 text-xs font-serif flex items-start gap-2"><span className="text-blue-500 mt-0.5">▹</span> {cert.trim()}</li>
-                                                    ))}
-                                                </ul>
-                                            ) : <span className="text-slate-400 text-sm italic">No certifications listed.</span>}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><span>🏢</span> Professional Arsenal</h4>
-                                    <div className="space-y-4">
-                                        {resumeData.workExperience?.length > 0 ? resumeData.workExperience.map((job, idx) => (
-                                            <div key={idx} className="bg-white p-6 rounded-2xl border border-violet-100 shadow-sm relative overflow-hidden group">
-                                                <div className="absolute top-0 left-0 w-1 h-full bg-violet-400/50"></div>
-                                                <div className="flex justify-between items-start mb-4">
-                                                    <div>
-                                                        <h5 className="text-lg font-bold text-slate-800">{job.role}</h5>
-                                                        <div className="text-violet-600 text-sm font-mono">{job.company}</div>
-                                                    </div>
-                                                    <div className="flex items-center gap-4">
-                                                        <span className="bg-slate-50 text-slate-600 border border-slate-200 px-3 py-1 rounded-lg text-xs font-bold">{job.duration}</span>
-                                                        <button onClick={() => handleCopyText(formatJobForCopy(job), `job-${idx}`)} className="text-slate-400 hover:text-violet-600 transition-colors">{copiedId === `job-${idx}` ? '✅' : '📋'}</button>
-                                                    </div>
-                                                </div>
-                                                <ul className="space-y-2 mt-4">
-                                                    {job.bullets?.map((bullet, bIdx) => (
-                                                        <li key={bIdx} className="text-slate-600 text-sm font-serif leading-relaxed flex items-start gap-3"><span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0"></span>{bullet}</li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        )) : <p className="text-slate-400 text-sm italic">No experience records found.</p>}
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><span>🚀</span> Strategic Projects</h4>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {resumeData.projects?.length > 0 ? resumeData.projects.map((proj, idx) => {
-                                            const techList = Array.isArray(proj.technologies) ? proj.technologies : (proj.technologies ? proj.technologies.split(',') : []);
-                                            return (
-                                                <div key={idx} className="bg-white p-5 rounded-2xl border border-blue-100 shadow-sm">
-                                                    <div className="flex justify-between items-start mb-2">
-                                                        <h5 className="text-md font-bold text-slate-800">{proj.name}</h5>
-                                                        <button onClick={() => handleCopyText(formatProjectForCopy(proj), `proj-${idx}`)} className="text-slate-400 hover:text-blue-600 transition-colors text-sm">{copiedId === `proj-${idx}` ? '✅' : '📋'}</button>
-                                                    </div>
-                                                    <div className="flex flex-wrap gap-1.5 mb-3">
-                                                        {techList.map((tech, tIdx) => (
-                                                            <span key={tIdx} className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded text-[10px] font-mono">{tech.trim()}</span>
-                                                        ))}
-                                                    </div>
-                                                    <p className="text-slate-600 text-xs font-serif leading-relaxed">{proj.description}</p>
-                                                </div>
-                                            );
-                                        }) : <p className="text-slate-400 text-sm italic">No projects found.</p>}
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><span>🎓</span> Academic Arsenal</h4>
-                                    <div className="space-y-4">
-                                        {resumeData.education?.length > 0 ? resumeData.education.map((edu, idx) => (
-                                            <div key={idx} className="bg-white p-5 rounded-2xl border border-emerald-100 shadow-sm flex justify-between items-center">
-                                                <div>
-                                                    <h5 className="text-slate-800 font-bold text-sm">{edu.degree}</h5>
-                                                    <div className="text-emerald-600 text-xs font-mono">{edu.institution}</div>
-                                                </div>
-                                                <div className="flex items-center gap-4">
-                                                    <span className="text-slate-500 text-xs font-mono">{edu.duration}</span>
-                                                    <button onClick={() => handleCopyText(`${edu.degree}\n${edu.institution}\n${edu.duration}`, `edu-${idx}`)} className="text-slate-400 hover:text-emerald-600 transition-colors">{copiedId === `edu-${idx}` ? '✅' : '📋'}</button>
-                                                </div>
-                                            </div>
-                                        )) : <p className="text-slate-400 text-sm italic">No education records found.</p>}
-                                    </div>
-                                </div>
-
-                                {/* ---> NEW: READ-ONLY DYNAMIC SECTIONS <--- */}
-                                {Object.entries(resumeData).map(([key, value]) => {
-                                    const standardKeys = ['fullName', 'profileSummary', 'coreSkills', 'certifications', 'workExperience', 'projects', 'education'];
-                                    if (standardKeys.includes(key)) return null;
-                                    if (!value || (Array.isArray(value) && value.length === 0)) return null;
-
-                                    return (
-                                        <div key={key}>
-                                            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                                <span>✨</span> {key.replace(/([A-Z])/g, ' $1').trim()}
+                                    {/* 2. PROFILE SUMMARY (Stealth Hover) */}
+                                    <div className="bg-white p-6 rounded-2xl border border-violet-100 shadow-sm relative group/summary transition-all duration-300">
+                                        <div className="flex justify-between items-center mb-4 border-b border-violet-50 pb-2">
+                                            <h4 className="text-[10px] font-black text-violet-600 uppercase tracking-widest flex items-center gap-2">
+                                                <span>🎯</span> Profile Summary
                                             </h4>
-                                            <div className="bg-white p-5 rounded-xl border border-violet-100 shadow-sm">
-                                                {Array.isArray(value) ? (
-                                                    <ul className="space-y-2">
-                                                        {value.map((item, idx) => (
-                                                            <li key={idx} className="text-slate-700 text-xs font-serif flex items-start gap-2"><span className="text-violet-500 mt-0.5">▹</span> {item}</li>
+                                            <button
+                                                onClick={() => handleCopyText(resumeData.profileSummary, 'summary')}
+                                                className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border bg-white text-slate-500 border-slate-200 hover:bg-slate-100 opacity-0 group-hover/summary:opacity-100 transition-all duration-200"
+                                            >
+                                                {copiedId === 'summary' ? 'Copied' : 'Copy'}
+                                            </button>
+                                        </div>
+                                        <p className="text-slate-600 text-sm font-serif leading-relaxed">{resumeData.profileSummary || 'No summary provided.'}</p>
+                                    </div>
+
+                                    {/* 3. SKILLS & CERTS GRID (Stealth Hover) */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="bg-white p-6 rounded-2xl border border-emerald-100 shadow-sm relative group/skills transition-all duration-300">
+                                            <div className="flex justify-between items-center mb-4 border-b border-emerald-50 pb-2">
+                                                <h4 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-2">
+                                                    <span>💻</span> Core Skills
+                                                </h4>
+                                                <button
+                                                    onClick={() => handleCopyText(resumeData.coreSkills, 'skills')}
+                                                    className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border bg-white text-slate-500 border-slate-200 hover:bg-slate-100 opacity-0 group-hover/skills:opacity-100 transition-all duration-200"
+                                                >
+                                                    {copiedId === 'skills' ? 'Copied' : 'Copy'}
+                                                </button>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {resumeData.coreSkills ? resumeData.coreSkills.split(',').map((skill, idx) => (
+                                                    <span key={idx} className="bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg text-[10px] font-bold border border-emerald-200 shadow-sm uppercase tracking-wider">{skill.trim()}</span>
+                                                )) : <span className="text-slate-400 text-sm italic font-serif">No skills listed.</span>}
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-white p-6 rounded-2xl border border-blue-100 shadow-sm relative group/certs transition-all duration-300">
+                                            <div className="flex justify-between items-center mb-4 border-b border-blue-50 pb-2">
+                                                <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-2">
+                                                    <span>📜</span> Certifications
+                                                </h4>
+                                                <button
+                                                    onClick={() => handleCopyText(resumeData.certifications, 'certs')}
+                                                    className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border bg-white text-slate-500 border-slate-200 hover:bg-slate-100 opacity-0 group-hover/certs:opacity-100 transition-all duration-200"
+                                                >
+                                                    {copiedId === 'certs' ? 'Copied' : 'Copy'}
+                                                </button>
+                                            </div>
+                                            {/* ---> THE FIX: Changed max-h to a strict h-[180px] and added flex/w-full <--- */}
+                                            <div className="h-[180px] flex flex-col w-full mt-2">
+                                                <WaterfallScroll className="pr-2">
+                                                    {resumeData.certifications ? (
+                                                        <ul className="space-y-3">
+                                                            {resumeData.certifications.split(/[\n•*]/).filter(c => c.trim() !== '').map((cert, idx) => (
+                                                                <li key={idx} className="text-slate-600 text-sm font-serif flex items-start gap-3">
+                                                                    <span className="text-blue-400 mt-1 text-xs">▹</span>
+                                                                    <span className="leading-relaxed">{cert.trim()}</span>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    ) : <span className="text-slate-400 text-sm italic font-serif">No certifications listed.</span>}
+                                                </WaterfallScroll>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* 4. PROFESSIONAL ARSENAL (Stealth Hover per job) */}
+                                    <div>
+                                        <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2 ml-2">
+                                            <span>🏢</span> Professional Arsenal
+                                        </h4>
+                                        <div className="space-y-4">
+                                            {resumeData.workExperience?.length > 0 ? resumeData.workExperience.map((job, idx) => (
+                                                <div key={idx} className="bg-white p-6 rounded-2xl border border-violet-100 shadow-sm relative overflow-hidden group/job transition-all duration-300">
+                                                    <div className="absolute top-0 left-0 w-1.5 h-full bg-violet-400/50"></div>
+
+                                                    <div className="flex justify-between items-start mb-4 pl-2 border-b border-violet-50 pb-3">
+                                                        <div>
+                                                            <h5 className="text-lg font-black text-slate-800">{job.role}</h5>
+                                                            <div className="text-violet-600 text-xs font-black uppercase tracking-widest mt-1">{job.company}</div>
+                                                        </div>
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="bg-slate-50 text-slate-600 border border-slate-200 px-3 py-1 rounded-lg text-[10px] font-black tracking-widest uppercase">{job.duration}</span>
+                                                            <button
+                                                                onClick={() => handleCopyText(formatJobForCopy(job), `job-${idx}`)}
+                                                                className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border bg-white text-slate-500 border-slate-200 hover:bg-slate-100 opacity-0 group-hover/job:opacity-100 transition-all duration-200"
+                                                            >
+                                                                {copiedId === `job-${idx}` ? 'Copied' : 'Copy'}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <ul className="space-y-3 mt-4 pl-2">
+                                                        {job.bullets?.map((bullet, bIdx) => (
+                                                            <li key={bIdx} className="text-slate-600 text-sm font-serif leading-relaxed flex items-start gap-3">
+                                                                <span className="mt-2 w-1.5 h-1.5 rounded-full bg-violet-300 shrink-0"></span>
+                                                                <span>{bullet}</span>
+                                                            </li>
                                                         ))}
                                                     </ul>
-                                                ) : (
-                                                    <p className="text-slate-700 text-sm font-serif leading-relaxed">{String(value)}</p>
-                                                )}
-                                            </div>
+                                                </div>
+                                            )) : <p className="text-slate-400 text-sm italic ml-2">No experience records found.</p>}
                                         </div>
-                                    );
-                                })}
+                                    </div>
 
-                            </div>
+                                    {/* 5. STRATEGIC PROJECTS (Stealth Hover per project) */}
+                                    <div>
+                                        <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2 ml-2">
+                                            <span>🚀</span> Strategic Projects
+                                        </h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {resumeData.projects?.length > 0 ? resumeData.projects.map((proj, idx) => {
+                                                const techList = Array.isArray(proj.technologies) ? proj.technologies : (proj.technologies ? proj.technologies.split(',') : []);
+                                                return (
+                                                    <div key={idx} className="bg-white p-6 rounded-2xl border border-blue-100 shadow-sm relative group/proj transition-all duration-300 flex flex-col h-full">
+                                                        <div className="flex justify-between items-start mb-3 border-b border-blue-50 pb-3">
+                                                            <h5 className="text-sm font-black text-slate-800 pr-2 leading-tight">{proj.name}</h5>
+                                                            <button
+                                                                onClick={() => handleCopyText(formatProjectForCopy(proj), `proj-${idx}`)}
+                                                                className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border bg-white text-slate-500 border-slate-200 hover:bg-slate-100 opacity-0 group-hover/proj:opacity-100 transition-all duration-200 shrink-0"
+                                                            >
+                                                                {copiedId === `proj-${idx}` ? 'Copied' : 'Copy'}
+                                                            </button>
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-1.5 mb-4">
+                                                            {techList.map((tech, tIdx) => (
+                                                                <span key={tIdx} className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest">{tech.trim()}</span>
+                                                            ))}
+                                                        </div>
+                                                        <p className="text-slate-600 text-sm font-serif leading-relaxed mt-auto">{proj.description}</p>
+                                                    </div>
+                                                );
+                                            }) : <p className="text-slate-400 text-sm italic ml-2">No projects found.</p>}
+                                        </div>
+                                    </div>
+
+                                    {/* 6. ACADEMIC ARSENAL (Stealth Hover per degree) */}
+                                    <div>
+                                        <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2 ml-2">
+                                            <span>🎓</span> Academic Arsenal
+                                        </h4>
+                                        <div className="space-y-3">
+                                            {resumeData.education?.length > 0 ? resumeData.education.map((edu, idx) => (
+                                                <div key={idx} className="bg-white p-5 rounded-2xl border border-emerald-100 shadow-sm flex justify-between items-center relative group/edu transition-all duration-300">
+                                                    <div>
+                                                        <h5 className="text-slate-800 font-black text-sm uppercase tracking-wide">{edu.degree}</h5>
+                                                        <div className="text-emerald-600 text-xs font-bold mt-1">{edu.institution}</div>
+                                                    </div>
+                                                    <div className="flex items-center gap-4">
+                                                        <span className="text-slate-500 text-[10px] font-black uppercase tracking-widest">{edu.duration}</span>
+                                                        <button
+                                                            onClick={() => handleCopyText(`${edu.degree}\n${edu.institution}\n${edu.duration}`, `edu-${idx}`)}
+                                                            className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border bg-white text-slate-500 border-slate-200 hover:bg-slate-100 opacity-0 group-hover/edu:opacity-100 transition-all duration-200"
+                                                        >
+                                                            {copiedId === `edu-${idx}` ? 'Copied' : 'Copy'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )) : <p className="text-slate-400 text-sm italic ml-2">No education records found.</p>}
+                                        </div>
+                                    </div>
+
+                                    {/* ---> NEW: READ-ONLY DYNAMIC SECTIONS <--- */}
+                                    {Object.entries(resumeData).map(([key, value]) => {
+                                        const standardKeys = ['fullName', 'profileSummary', 'coreSkills', 'certifications', 'workExperience', 'projects', 'education'];
+                                        if (standardKeys.includes(key)) return null;
+                                        if (!value || (Array.isArray(value) && value.length === 0)) return null;
+
+                                        return (
+                                            <div key={key}>
+                                                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2 ml-2">
+                                                    <span>✨</span> {key.replace(/([A-Z])/g, ' $1').trim()}
+                                                </h4>
+                                                <div className="bg-white p-6 rounded-2xl border border-violet-100 shadow-sm">
+                                                    {Array.isArray(value) ? (
+                                                        <ul className="space-y-3">
+                                                            {value.map((item, idx) => (
+                                                                <li key={idx} className="text-slate-600 text-sm font-serif flex items-start gap-3">
+                                                                    <span className="text-violet-400 mt-1 text-xs">▹</span>
+                                                                    <span className="leading-relaxed">{item}</span>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    ) : (
+                                                        <p className="text-slate-600 text-sm font-serif leading-relaxed">{String(value)}</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+
+                                </div>
                         ) : (
 
                             /* ---> THE EDIT MODE (Form + Dropzone) <--- */

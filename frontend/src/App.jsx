@@ -167,12 +167,12 @@ function App() {
                         {/* ----------------------------------------------------------------- */}
                         {activeTab === 'history' && (
                             <div className="animate-in fade-in zoom-in-95 duration-300 h-full flex flex-col">
-                                <div className="flex flex-col md:flex-row justify-between items-start border-b border-violet-100 pb-6 mb-2 gap-4">
+                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-violet-100 pb-6 mb-6 gap-4">
                                     <div>
-                                        <h3 className="text-xl md:text-3xl font-black text-slate-800 uppercase tracking-widest mb-2 flex items-center gap-3">
-                                            Strategic Action Matrix
+                                        <h3 className="text-2xl md:text-3xl font-black text-slate-800 uppercase tracking-widest mb-2 flex items-center gap-3">
+                                            Action Matrix
                                         </h3>
-                                        <div className="flex gap-2 text-xs font-mono">
+                                        <div className="flex flex-wrap gap-2 text-[10px] md:text-xs font-mono">
                                             <span className="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1 rounded-full">Live Pipeline</span>
                                             <span className="bg-violet-50 text-violet-600 border border-violet-200 px-3 py-1 rounded-full">Auto-Sync Active</span>
                                         </div>
@@ -182,12 +182,12 @@ function App() {
                                     <button
                                         onClick={handleRecalibrate}
                                         disabled={isRecalibrating}
-                                        className="bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-sm disabled:opacity-70 flex items-center gap-2 w-full md:w-auto justify-center"
+                                        className="bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 px-5 py-2.5 rounded-xl text-[10px] md:text-xs font-bold uppercase tracking-widest transition-all shadow-sm disabled:opacity-70 flex items-center gap-2 w-full md:w-auto justify-center whitespace-nowrap"
                                     >
                                         {isRecalibrating ? (
                                             <>
                                                 <span className="w-3 h-3 border-2 border-violet-500 border-t-transparent rounded-full animate-spin"></span>
-                                                Re-embedding Data...
+                                                Re-embedding...
                                             </>
                                         ) : (
                                             "Recalibrate Vectors"
