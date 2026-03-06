@@ -16,6 +16,9 @@ export default function KanbanBoard() {
     const [deletingId, setDeletingId] = useState(null);
     const [simulatorJob, setSimulatorJob] = useState(null);
 
+    // ---> NEW: SORTING STATE <---
+    const [sortBy, setSortBy] = useState('newest');
+
     const [toastMessage, setToastMessage] = useState(null);
     const showToast = (message) => {
         setToastMessage(message);
@@ -169,6 +172,35 @@ export default function KanbanBoard() {
         return 'text-rose-700 bg-rose-100 border-rose-300';
     };
 
+    // ---> DYNAMIC SORTING ENGINE <---
+    const getSortedJobs = (jobsList) => {
+        return [...jobsList].sort((a, b) => {
+            const scoreA = a.matchScore || a.MatchScore || 0;
+            const scoreB = b.matchScore || b.MatchScore || 0;
+            const nameA = (a.companyName || a.CompanyName || "").toLowerCase();
+            const nameB = (b.companyName || b.CompanyName || "").toLowerCase();
+
+            // 1. Try to find an actual Timestamp from the backend
+            const timeA = new Date(a.createdAt || a.CreatedAt || a.savedAt || a.timestamp || 0).getTime();
+            const timeB = new Date(b.createdAt || b.CreatedAt || b.savedAt || b.timestamp || 0).getTime();
+
+            // 2. Fallback: Use the original DB insertion order from the Master Array
+            const indexA = safeJobs.indexOf(a);
+            const indexB = safeJobs.indexOf(b);
+
+            switch (sortBy) {
+                case 'score-high': return scoreB - scoreA;
+                case 'score-low': return scoreA - scoreB;
+                case 'company-a-z': return nameA.localeCompare(nameB);
+                case 'oldest':
+                    return (timeA > 0 && timeB > 0) ? (timeA - timeB) : (indexA - indexB);
+                case 'newest':
+                default:
+                    return (timeA > 0 && timeB > 0) ? (timeB - timeA) : (indexB - indexA);
+            }
+        });
+    };
+
     const safeJobs = Array.isArray(jobs) ? jobs : [];
     const hasManualJobs = safeJobs.some(j => j.pipelineStage === "Manual");
     const hasRadarJobs = safeJobs.some(j => (j.pipelineStage || "Radar") === "Radar");
@@ -182,7 +214,7 @@ export default function KanbanBoard() {
     if (isLoading) return <div className="text-slate-400 animate-pulse text-center mt-20 font-mono">Loading Tactical Pipeline...</div>;
 
     return (
-        <div className="flex h-full overflow-x-auto pb-8 custom-scrollbar gap-6 items-start mt-6 relative">
+        <div className="flex flex-col h-full mt-2 relative">
             <style>
                 {`
                     @keyframes premiumShatter {
@@ -193,101 +225,127 @@ export default function KanbanBoard() {
                 `}
             </style>
 
-            <DragDropContext onDragEnd={onDragEnd}>
-                {DISPLAY_STAGES.map((stage) => {
-                    const columnJobs = safeJobs.filter(j => (j.pipelineStage || "Radar") === stage);
+            {/* ---> NEW: THE SORTING CONTROL BAR <--- */}
+            <div className="flex justify-end mb-4 px-2 relative z-20">
+                <div className="flex items-center gap-3 bg-white/60 backdrop-blur-md border border-white/80 px-4 py-2 rounded-2xl shadow-sm">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-violet-500">
+                        <span className="mr-1.5 text-xs"></span>
+                         
+                    </span>
+                    <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value)}
+                        className="text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer hover:text-violet-700 transition-colors"
+                    >
+                        <option value="newest">📅 Newest Added</option>
+                        <option value="oldest">⏳ Oldest Added</option>
+                        <option value="score-high">🔥 Highest ACE Score</option>
+                        <option value="score-low">🧊 Lowest ACE Score</option>
+                        <option value="company-a-z">🏢 Company (A-Z)</option>
+                    </select>
+                </div>
+            </div>
 
-                    return (
-                        <div key={stage} className="min-w-[320px] w-[320px] flex flex-col bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-sm h-[calc(100vh-14rem)]">
+            {/* ---> THE KANBAN COLUMNS <--- */}
+            <div className="flex h-full overflow-x-auto pb-8 custom-scrollbar gap-6 items-start">
+                <DragDropContext onDragEnd={onDragEnd}>
+                    {DISPLAY_STAGES.map((stage) => {
 
-                            <div className="p-4 border-b border-violet-100/50 flex justify-between items-center bg-white/60 rounded-t-2xl shadow-sm shrink-0 relative z-30">
-                                <h3 className="text-violet-900 font-black uppercase text-[10px] tracking-widest">{stage}</h3>
-                                <span className="bg-violet-100 text-violet-700 text-[10px] px-2 py-0.5 rounded-full font-mono">{columnJobs.length}</span>
-                            </div>
+                        // 1. Filter the jobs for this column
+                        const columnJobsRaw = safeJobs.filter(j => (j.pipelineStage || "Radar") === stage);
 
-                            <WaterfallScroll className="flex-1 transition-colors duration-300">
+                        // 2. Pass them through the Sorting Engine
+                        const columnJobs = getSortedJobs(columnJobsRaw);
+
+                        return (
+                            <div key={stage} className="min-w-[320px] w-[320px] flex flex-col bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-sm h-[calc(100vh-18rem)]">
+
+                                <div className="p-4 border-b border-violet-100/50 flex justify-between items-center bg-white/60 rounded-t-2xl shadow-sm shrink-0 relative z-30">
+                                    <h3 className="text-violet-900 font-black uppercase text-[10px] tracking-widest">{stage}</h3>
+                                    <span className="bg-violet-100 text-violet-700 text-[10px] px-2 py-0.5 rounded-full font-mono">{columnJobs.length}</span>
+                                </div>
+
                                 <Droppable droppableId={stage}>
                                     {(provided, snapshot) => (
-                                        <div
-                                            ref={provided.innerRef}
-                                            {...provided.droppableProps}
-                                            className={`p-4 min-h-full flex flex-col ${snapshot.isDraggingOver ? 'bg-violet-50/50' : ''}`}
-                                        >
-                                            {columnJobs.map((job, index) => {
-                                                const safeId = String(job.id || job.Id || `fallback-${index}`);
-                                                const isDeleting = deletingId === safeId;
 
-                                                return (
-                                                    <Draggable key={safeId} draggableId={safeId} index={index}>
-                                                        {(provided, snapshot) => {
-                                                            const getDraggableStyle = (style, snapshot) => {
-                                                                if (!style) return {};
-                                                                if (snapshot.isDropAnimating) return { ...style, transitionDuration: '0.2s', transitionTimingFunction: 'cubic-bezier(0.2, 1, 0.1, 1)' };
-                                                                if (snapshot.isDragging) return { ...style, transform: style.transform ? `${style.transform} scale(1.03) rotate(1deg)` : style.transform, transition: 'none', zIndex: 9999 };
-                                                                return style;
-                                                            };
+                                        <WaterfallScroll className={`transition-colors duration-300 ${snapshot.isDraggingOver ? 'bg-violet-50/50' : ''}`}>
 
-                                                            return (
-                                                                <div
-                                                                    ref={provided.innerRef}
-                                                                    {...provided.draggableProps}
-                                                                    {...provided.dragHandleProps}
-                                                                    style={getDraggableStyle(provided.draggableProps.style, snapshot)}
-                                                                    className={`relative mb-4 rounded-xl select-none transition-[border-color,box-shadow,background-color] duration-200 ease-out p-4 ${activeMenuId === safeId ? 'z-50' : 'z-10'}
-                                                                        ${isDeleting ? 'bg-transparent border-transparent shadow-none p-0' :
-                                                                            snapshot.isDragging ? 'border-violet-400 bg-white shadow-2xl cursor-grabbing ring-2 ring-violet-500/20' : 'bg-white/90 backdrop-blur-sm border border-violet-100 hover:border-violet-300 hover:shadow-md cursor-grab'}`}
-                                                                >
-                                                                    {isDeleting ? (
-                                                                        <div className="absolute inset-0 z-50 pointer-events-none w-full h-24">
-                                                                            {renderShards(job.matchScore || job.MatchScore)}
-                                                                        </div>
-                                                                    ) : (
-                                                                        <>
-                                                                            <div className="flex justify-between items-start mb-2">
-                                                                                <div className={`px-2 py-1 rounded border text-[10px] font-black font-mono ${getScoreColor(job.matchScore || job.MatchScore)}`}>{job.matchScore || job.MatchScore}% MATCH</div>
-                                                                                <div className="relative">
-                                                                                    <button onClick={(e) => toggleMenu(e, safeId)} className="text-slate-400 hover:text-violet-600 transition-colors p-1 relative z-10">•••</button>
+                                            <div ref={provided.innerRef} {...provided.droppableProps} className="p-4 min-h-full flex flex-col">
+                                                {columnJobs.map((job, index) => {
+                                                    const safeId = String(job.id || job.Id || `fallback-${index}`);
+                                                    const isDeleting = deletingId === safeId;
 
-                                                                                    {activeMenuId === safeId && (
-                                                                                        <div className="absolute top-8 right-0 w-48 bg-white border border-violet-100 rounded-lg shadow-xl py-1 z-[100] animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
-                                                                                            <button onClick={(e) => openJobDetails(e, job)} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-violet-50 hover:text-violet-700 flex items-center gap-3 transition-colors">
-                                                                                                <span className="text-violet-500 text-lg">🔍</span> View MatchCard
-                                                                                            </button>
-                                                                                            <button onClick={(e) => launchSimulator(e, job)} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-3 transition-colors border-t border-slate-50">
-                                                                                                <span className="text-emerald-500 text-lg">🎯</span> Mock Interview
-                                                                                            </button>
-                                                                                            {job.jobUrl && (
-                                                                                                <button onClick={() => window.open(job.jobUrl, '_blank')} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-3 transition-colors border-t border-slate-50">
-                                                                                                    <span className="text-blue-400 text-lg">🔗</span> Original Post
-                                                                                                </button>
-                                                                                            )}
-                                                                                            <button onClick={(e) => handleDelete(e, safeId)} className="w-full text-left px-4 py-2.5 text-xs font-black tracking-widest uppercase text-rose-600 hover:bg-rose-50 flex items-center gap-3 transition-colors border-t border-slate-100">
-                                                                                                <span className="text-rose-500 text-lg">🗑️</span> Purge Record
-                                                                                            </button>
-                                                                                        </div>
-                                                                                    )}
-                                                                                </div>
+                                                    return (
+                                                        <Draggable key={safeId} draggableId={safeId} index={index}>
+                                                            {(provided, snapshot) => {
+
+                                                                const getDraggableStyle = (style, snapshot) => {
+                                                                    if (!style) return {};
+                                                                    if (snapshot.isDropAnimating) return { ...style, transitionDuration: '0.2s', transitionTimingFunction: 'cubic-bezier(0.2, 1, 0.1, 1)' };
+                                                                    if (snapshot.isDragging) return { ...style, transform: style.transform ? `${style.transform} scale(1.03) rotate(1deg)` : style.transform, transition: 'none', zIndex: 9999 };
+                                                                    return style;
+                                                                };
+
+                                                                return (
+                                                                    <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
+                                                                        style={getDraggableStyle(provided.draggableProps.style, snapshot)}
+                                                                        className={`relative mb-4 rounded-xl select-none transition-[border-color,box-shadow,background-color] duration-200 ease-out p-4 ${activeMenuId === safeId ? 'z-50' : 'z-10'}
+                                                                            ${isDeleting ? 'bg-transparent border-transparent shadow-none p-0' :
+                                                                                snapshot.isDragging ? 'border-violet-400 bg-white shadow-2xl cursor-grabbing ring-2 ring-violet-500/20' : 'bg-white/90 backdrop-blur-sm border border-violet-100 hover:border-violet-300 hover:shadow-md cursor-grab'}`}
+                                                                    >
+                                                                        {isDeleting ? (
+                                                                            <div className="absolute inset-0 z-50 pointer-events-none w-full h-24">
+                                                                                {renderShards(job.matchScore || job.MatchScore)}
                                                                             </div>
-                                                                            <h4 className="text-slate-800 font-bold text-sm leading-tight mb-1 pr-4 truncate">{job.roleTitle || job.RoleTitle}</h4>
-                                                                            <p className="text-violet-600 text-xs font-mono truncate">{job.companyName || job.CompanyName}</p>
-                                                                        </>
-                                                                    )}
-                                                                </div>
-                                                            );
-                                                        }}
-                                                    </Draggable>
-                                                );
-                                            })}
-                                            {provided.placeholder}
-                                        </div>
+                                                                        ) : (
+                                                                            <>
+                                                                                <div className="flex justify-between items-start mb-2">
+                                                                                    <div className={`px-2 py-1 rounded border text-[10px] font-black font-mono ${getScoreColor(job.matchScore || job.MatchScore)}`}>{job.matchScore || job.MatchScore}% MATCH</div>
+                                                                                    <div className="relative">
+                                                                                        <button onClick={(e) => toggleMenu(e, safeId)} className="text-slate-400 hover:text-violet-600 transition-colors p-1 relative z-10">•••</button>
+
+                                                                                        {activeMenuId === safeId && (
+                                                                                            <div className="absolute top-8 right-0 w-48 bg-white border border-violet-100 rounded-lg shadow-xl py-1 z-[100] animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
+                                                                                                <button onClick={(e) => openJobDetails(e, job)} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-violet-50 hover:text-violet-700 flex items-center gap-3 transition-colors">
+                                                                                                    <span className="text-violet-500 text-lg">🔍</span> View MatchCard
+                                                                                                </button>
+                                                                                                <button onClick={(e) => launchSimulator(e, job)} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-3 transition-colors border-t border-slate-50">
+                                                                                                    <span className="text-emerald-500 text-lg">🎯</span> Mock Interview
+                                                                                                </button>
+                                                                                                {job.jobUrl && (
+                                                                                                    <button onClick={() => window.open(job.jobUrl, '_blank')} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-3 transition-colors border-t border-slate-50">
+                                                                                                        <span className="text-blue-400 text-lg">🔗</span> Original Post
+                                                                                                    </button>
+                                                                                                )}
+                                                                                                <button onClick={(e) => handleDelete(e, safeId)} className="w-full text-left px-4 py-2.5 text-xs font-black tracking-widest uppercase text-rose-600 hover:bg-rose-50 flex items-center gap-3 transition-colors border-t border-slate-100">
+                                                                                                    <span className="text-rose-500 text-lg">🗑️</span> Purge Record
+                                                                                                </button>
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                                <h4 className="text-slate-800 font-bold text-sm leading-tight mb-1 pr-4 truncate">{job.roleTitle || job.RoleTitle}</h4>
+                                                                                <p className="text-violet-600 text-xs font-mono truncate">{job.companyName || job.CompanyName}</p>
+                                                                            </>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            }}
+                                                        </Draggable>
+                                                    );
+                                                })}
+                                                {provided.placeholder}
+                                            </div>
+                                        </WaterfallScroll>
                                     )}
                                 </Droppable>
-                            </WaterfallScroll>
-                        </div>
-                    );
-                })}
-            </DragDropContext>
+                            </div>
+                        );
+                    })}
+                </DragDropContext>
+            </div>
 
+            {/* ---> MODALS & TOASTS <--- */}
             {selectedJob && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 lg:p-8 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-200">
                     <div className="w-full max-w-5xl h-full max-h-[90vh] flex flex-col relative animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
@@ -311,7 +369,6 @@ export default function KanbanBoard() {
                 </div>,
                 document.body
             )}
-
         </div>
     );
 }
