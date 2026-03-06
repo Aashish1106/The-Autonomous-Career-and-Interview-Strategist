@@ -16,6 +16,7 @@ const MatchCard = ({ job = null }) => {
     // Strategic Override States
     const [userInstruction, setUserInstruction] = useState('');
     const [coachFeedback, setCoachFeedback] = useState(null);
+    const [manualPromptFallback, setManualPromptFallback] = useState(null);
 
     // Loading States
     const [isFetching, setIsFetching] = useState(false);
@@ -24,6 +25,7 @@ const MatchCard = ({ job = null }) => {
     const [isGeneratingLetter, setIsGeneratingLetter] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [showSimulator, setShowSimulator] = useState(false);
+    const [isAsking, setIsAsking] = useState(false);
 
     // Data States
     const [evaluation, setEvaluation] = useState(null);
@@ -31,16 +33,15 @@ const MatchCard = ({ job = null }) => {
     const [tailoredSuggestions, setTailoredSuggestions] = useState(null);
     const [jobId, setJobId] = useState(null);
     const [lastSavedHash, setLastSavedHash] = useState(null);
+    const [customAnswers, setCustomAnswers] = useState([]);
 
     // ---> HYBRID MODE INJECTION <---
-    // If a 'job' prop is passed (e.g., from the Kanban Board), pre-fill the entire state!
     React.useEffect(() => {
         if (job) {
             setUrl(job.jobUrl || job.Url || '');
             setJobText(job.jobDescription || job.JobDescription || '');
             setJobId(job.id || job.Id);
 
-            // 1. Unpack the original Evaluation JSON from the Database!
             let realGaps = [];
             let realAction = "Review Match";
             let realWorkplace = "HYBRID/UNKNOWN";
@@ -49,7 +50,6 @@ const MatchCard = ({ job = null }) => {
                 const evalStr = job.evaluationJson || job.EvaluationJson;
                 if (evalStr) {
                     const parsedEval = typeof evalStr === 'string' ? JSON.parse(evalStr) : evalStr;
-                    // Map the DB keys back to the UI state
                     realGaps = parsedEval.missing_skills || [];
                     realAction = parsedEval.recommended_action || "Review Match";
                     realWorkplace = parsedEval.is_remote ? "REMOTE" : "ON-SITE";
@@ -58,7 +58,6 @@ const MatchCard = ({ job = null }) => {
                 console.error("Failed to parse evaluation JSON", e);
             }
 
-            // 2. Set the UI states
             setEvaluation({
                 matchScore: job.matchScore || job.MatchScore || 0,
                 companyName: job.companyName || job.CompanyName || "Unknown Company",
@@ -68,7 +67,6 @@ const MatchCard = ({ job = null }) => {
                 workplaceType: realWorkplace
             });
 
-            // 3. Load the AI Artifacts
             setCoverLetter(job.coverLetterText || job.CoverLetterText || null);
 
             try {
@@ -76,6 +74,9 @@ const MatchCard = ({ job = null }) => {
                 if (tailoredData) {
                     setTailoredSuggestions(typeof tailoredData === 'string' ? JSON.parse(tailoredData) : tailoredData);
                 }
+
+                const answersData = job.customAnswersJson || job.CustomAnswersJson;
+                if (answersData) setCustomAnswers(typeof answersData === 'string' ? JSON.parse(answersData) : answersData);
             } catch (e) {
                 console.error("Failed to parse tailored suggestions", e);
             }
@@ -85,46 +86,38 @@ const MatchCard = ({ job = null }) => {
     // --- HELPER FUNCTIONS ---
     const showToast = (message) => {
         setToastMessage(message);
-        setTimeout(() => setToastMessage(null), 3000);
+        setTimeout(() => setToastMessage(null), 4000);
     };
 
     const handleSaveToHistory = async () => {
         if (!evaluation) return;
-        const currentDataString = JSON.stringify({ evaluation, coverLetter, tailoredSuggestions });
-        if (lastSavedHash === currentDataString) {
-            showToast("⚠️ Already Saved: No new changes detected");
-            return;
-        }
+        const currentDataString = JSON.stringify({ evaluation, coverLetter, tailoredSuggestions, customAnswers });
+        if (lastSavedHash === currentDataString) return showToast("⚠️ Already Saved: No new changes detected");
 
         try {
-            // ---> NEW: The Auto-Routing Logic <---
-            // 1. If it's an existing job, keep its current stage.
-            // 2. If it has a screenshot, it was scraped -> "Queued".
-            // 3. Otherwise, it was manually pasted -> "Manual".
             const derivedStage = job?.pipelineStage || job?.PipelineStage || (screenshot ? "Queued" : "Manual");
-            const payload = { JobId: jobId, Url: url, JobDescription: jobText, Evaluation: evaluation, CoverLetter: coverLetter, TailoredSuggestions: tailoredSuggestions, PipelineStage: derivedStage };
+            const payload = {
+                JobId: jobId, Url: url, JobDescription: jobText,
+                Evaluation: evaluation, CoverLetter: coverLetter,
+                TailoredSuggestions: tailoredSuggestions,
+                CustomAnswers: customAnswers,
+                PipelineStage: derivedStage
+            };
+
             const response = await fetch("https://jarvis-ace-api-hbepfjgzhmguhchv.southindia-01.azurewebsites.net/api/JobStrategist/save-history", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
+                method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
             });
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Backend Error (${response.status}): ${errorText}`);
-            }
-
+            if (!response.ok) throw new Error(`Backend Error`);
             const data = await response.json();
             if (data.jobId && !jobId) setJobId(data.jobId);
             setLastSavedHash(currentDataString);
             showToast("💾 Application Snapshot Saved to Vault");
-
-            // ---> BROADCAST REFRESH SIGNAL TO VAULT <---
             window.dispatchEvent(new Event('vaultUpdated'));
-
         } catch (error) {
-            console.error("SAVE ERROR:", error); 
-            showToast(`🚨 ${error.message}`);
+            showToast(`🚨 Save failed`);
+            console.error("Failed in saving Snapshot to Vault", error);
         }
     };
 
@@ -134,6 +127,10 @@ const MatchCard = ({ job = null }) => {
         return 'stroke-pink-500';
     };
 
+    const generateFallbackPrompt = (intent) => {
+        return `I am applying for the ${evaluation?.roleTitle || "role"} at ${evaluation?.companyName || "this company"}.\n\nHere is the Job Description:\n${jobText}\n\nMy Instruction/Question: ${userInstruction || intent}\n\nPlease analyze this using my standard professional context.`;
+    };
+
     // --- HANDLERS ---
     const handleFetchData = async () => {
         if (!url) return showToast("Please enter a job URL.");
@@ -141,7 +138,7 @@ const MatchCard = ({ job = null }) => {
         setConsoleStatus('processing');
         setConsoleLogs(["> INITIATING STEALTH BROWSER ENGINE..."]);
         setJobText(''); setScreenshot(null); setEvaluation(null); setCoverLetter(null);
-        setTailoredSuggestions(null); setCoachFeedback(null);
+        setTailoredSuggestions(null); setCoachFeedback(null); setCustomAnswers([]);
 
         try {
             setTimeout(() => setConsoleLogs(prev => [...prev, "> BYPASSING WAF & EXTRACTING DOM..."]), 800);
@@ -155,7 +152,6 @@ const MatchCard = ({ job = null }) => {
 
             if (!response.ok) {
                 const errorText = await response.text();
-                // ---> UNIVERSAL 429 HANDLER <---
                 if (response.status === 429) {
                     throw new Error("⚠️ ACE Core: AI Token quota exhausted. Please rest and resume tomorrow.");
                 }
@@ -172,20 +168,6 @@ const MatchCard = ({ job = null }) => {
         } finally {
             setIsFetching(false);
         }
-    };
-
-    const handleDownloadPDF = () => {
-        if (!coverLetter) return;
-        const doc = new jsPDF();
-        doc.setFont("times", "normal");
-        doc.setFontSize(11);
-        const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-        doc.text(today, 20, 20);
-        const splitText = doc.splitTextToSize(coverLetter, 170);
-        doc.text(splitText, 20, 40);
-        const companyNameClean = evaluation?.companyName ? evaluation.companyName.replace(/[^a-zA-Z0-9]/g, '_') : 'Company';
-        doc.save(`Aashish_CoverLetter_${companyNameClean}.pdf`);
-        showToast("PDF Exported Successfully");
     };
 
     const handleEvaluate = async () => {
@@ -241,7 +223,6 @@ const MatchCard = ({ job = null }) => {
 
             if (!response.ok) {
                 const errorText = await response.text();
-                // ---> UNIVERSAL 429 HANDLER <---
                 if (response.status === 429) {
                     throw new Error("⚠️ ACE Core: AI Token quota exhausted. Please rest and resume tomorrow.");
                 }
@@ -249,7 +230,6 @@ const MatchCard = ({ job = null }) => {
             }
             const data = await response.json();
 
-            // CHECK THE GATEKEEPER
             if (data.is_instruction_accepted === false) {
                 setCoachFeedback(data.coach_feedback);
                 return;
@@ -257,7 +237,6 @@ const MatchCard = ({ job = null }) => {
 
             setTailoredSuggestions(data.suggestions);
 
-            // ---> NEW: Always show a toast! <---
             if (userInstruction) {
                 showToast("✨ Override Applied & Resume Tailored");
             } else {
@@ -284,7 +263,6 @@ const MatchCard = ({ job = null }) => {
 
             if (!response.ok) {
                 const errorText = await response.text();
-                // ---> UNIVERSAL 429 HANDLER <---
                 if (response.status === 429) {
                     throw new Error("⚠️ ACE Core: AI Token quota exhausted. Please rest and resume tomorrow.");
                 }
@@ -292,7 +270,6 @@ const MatchCard = ({ job = null }) => {
             }
             const data = await response.json();
 
-            // CHECK THE GATEKEEPER
             if (data.is_instruction_accepted === false) {
                 setCoachFeedback(data.coach_feedback);
                 return;
@@ -300,7 +277,6 @@ const MatchCard = ({ job = null }) => {
 
             setCoverLetter(data.cover_letter);
 
-            // ---> NEW: Always show a toast! <---
             if (userInstruction) {
                 showToast("📝 Override Applied & Letter Drafted");
             } else {
@@ -314,12 +290,109 @@ const MatchCard = ({ job = null }) => {
         }
     };
 
+    const handleAskACE = async () => {
+        if (!userInstruction) return showToast("Please type a question or instruction first.");
+        setIsAsking(true);
+        setCoachFeedback(null);
+        setManualPromptFallback(null);
+
+        try {
+            const payload = { JobDescription: jobText, Question: userInstruction };
+            const response = await fetch("https://jarvis-ace-api-hbepfjgzhmguhchv.southindia-01.azurewebsites.net/api/JobStrategist/ask-question", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                if (response.status === 429) {
+                    setManualPromptFallback(generateFallbackPrompt("Please answer this strategic question based on my resume and the job description."));
+                    throw new Error("⚠️ Token quota exhausted. Use the fallback prompt below.");
+                }
+                throw new Error("Backend error");
+            }
+
+            const data = await response.json();
+            setCustomAnswers(prev => [{ question: userInstruction, answer: data.answer }, ...prev]);
+            setUserInstruction('');
+            showToast("🧠 Custom Strategy Generated");
+        } catch (error) {
+            showToast(`🚨 ${error.message}`);
+        } finally {
+            setIsAsking(false);
+        }
+    };
+
+    const handleExportPDF = () => {
+        if (!coverLetter && !tailoredSuggestions && customAnswers.length === 0) {
+            return showToast("⚠️ Nothing to export! Generate artifacts first.");
+        }
+
+        const doc = new jsPDF();
+        const margin = 15;
+        let yPos = 20;
+        const pageHeight = doc.internal.pageSize.height;
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(22);
+        doc.text(`Application Kit: ${evaluation?.companyName || "Target Role"}`, margin, yPos);
+        yPos += 15;
+
+        const checkPageBreak = (addedHeight) => {
+            if (yPos + addedHeight >= pageHeight - 15) {
+                doc.addPage();
+                yPos = 20;
+            }
+        };
+
+        const printSection = (title, content) => {
+            checkPageBreak(30);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(14);
+            doc.text(title, margin, yPos);
+            yPos += 8;
+
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(11);
+            // Quick regex to strip markdown bolding **
+            const cleanContent = content.replace(/\*\*/g, '');
+            const splitText = doc.splitTextToSize(cleanContent, 180);
+
+            splitText.forEach(line => {
+                checkPageBreak(10);
+                doc.text(line, margin, yPos);
+                yPos += 6;
+            });
+            yPos += 5; // Bottom padding
+        };
+
+        if (coverLetter) printSection("Cover Letter", coverLetter);
+
+        if (tailoredSuggestions) {
+            const formattedSuggestions = typeof tailoredSuggestions === 'string'
+                ? tailoredSuggestions
+                : JSON.stringify(tailoredSuggestions, null, 2);
+            printSection("Tailored Resume Bullets", formattedSuggestions);
+        }
+
+        if (customAnswers.length > 0) {
+            // FIXED: Removed the unused 'idx' argument
+            customAnswers.forEach((qa) => {
+                printSection(`Q: ${qa.question}`, qa.answer);
+            });
+        }
+
+        const safeCompanyName = (evaluation?.companyName || "Job").replace(/[^a-zA-Z0-9]/g, "_");
+        doc.save(`ACE_Application_Kit_${safeCompanyName}.pdf`);
+        showToast("📄 Custom Application Kit Downloaded!");
+    };
+
     const handleDelete = async () => {
         setIsDeleting(true);
         setTimeout(() => {
             setJobText(''); setEvaluation(null); setCoverLetter(null); setTailoredSuggestions(null);
-            setUrl(''); setUserInstruction(''); setCoachFeedback(null); setJobId(null);
-            setLastSavedHash(null); setScreenshot(null); setIsDeleting(false);
+            setCustomAnswers([]); setUrl(''); setUserInstruction(''); setCoachFeedback(null);
+            setJobId(null); setLastSavedHash(null); setScreenshot(null); setManualPromptFallback(null);
+            setIsDeleting(false);
         }, 2000);
     };
 
@@ -330,21 +403,28 @@ const MatchCard = ({ job = null }) => {
             {/* The outer glowing ring */}
             <div className="absolute -inset-0.5 bg-gradient-to-r from-violet-300 via-fuchsia-300 to-indigo-300 rounded-[38px] blur opacity-30 group-hover:opacity-60 transition duration-1000 group-hover:duration-200 animate-pulse"></div>
 
-            {/* ---> The Main Frame: Now has h-full and overflow-hidden to lock the rounded corners! <--- */}
+            {/* ---> The Main Frame <--- */}
             <div className="relative bg-white/85 backdrop-blur-2xl rounded-[36px] border border-white/60 shadow-[0_20px_50px_-10px_rgba(139,92,246,0.15)] flex flex-col h-full overflow-hidden">
 
                 {/* ---> THE INNER SCROLLING VIEWPORT <--- */}
                 <div className="p-8 overflow-y-auto custom-scrollbar flex-1">
 
-                    {/* ---> ALL YOUR CONTENT GOES INSIDE HERE <--- */}
+                    {/* ---> VAULT HEADER WITH "VIEW ORIGINAL" BUTTON <--- */}
                     {job && (
-                        <div className="mb-6 flex items-center gap-3 bg-violet-100 border border-violet-200 px-4 py-2 rounded-xl w-fit shadow-sm">
-                            <span className="w-2 h-2 rounded-full bg-violet-500 animate-pulse"></span>
-                            <span className="text-violet-700 text-xs font-bold uppercase tracking-widest font-mono">Vault Snapshot Loaded</span>
+                        <div className="mb-6 flex items-center justify-between bg-violet-50 border border-violet-100 px-5 py-3 rounded-xl shadow-sm">
+                            <div className="flex items-center gap-3">
+                                <span className="w-2.5 h-2.5 rounded-full bg-violet-500 animate-pulse shadow-[0_0_8px_rgba(139,92,246,0.6)]"></span>
+                                <span className="text-violet-800 text-xs font-black uppercase tracking-widest font-mono">Vault Snapshot Loaded</span>
+                            </div>
+                            {url && (
+                                <a href={url} target="_blank" rel="noopener noreferrer" className="text-[10px] font-black uppercase tracking-widest text-violet-600 hover:text-white bg-white hover:bg-violet-600 border border-violet-200 px-4 py-2 rounded-lg transition-all flex items-center gap-2 shadow-sm">
+                                    <span>🔗</span> View Job Post
+                                </a>
+                            )}
                         </div>
                     )}
 
-                    {/* STAGE 1: URL Input & Fetching (HIDDEN IF SNAPSHOT) */}
+                    {/* STAGE 1: URL Input & Fetching */}
                     {!job && (
                         <div className="space-y-4 mb-8">
                             <div className="flex items-center gap-3 bg-white border border-violet-200 rounded-2xl p-2 px-4 focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-100 transition-all shadow-sm">
@@ -388,7 +468,7 @@ const MatchCard = ({ job = null }) => {
                     ) : (
                         <div className="space-y-4 animate-in fade-in duration-500">
 
-                            {/* ---> RESTORED SCREENSHOT RENDER <--- */}
+                            {/* SCREENSHOT RENDER */}
                             {screenshot && !job && (
                                 <div className="relative group rounded-2xl overflow-hidden border border-violet-100 shadow-md mb-4 animate-in fade-in slide-in-from-top-4 duration-700">
                                     <div className="absolute inset-0 bg-gradient-to-t from-slate-900/50 via-slate-900/10 to-transparent z-10 pointer-events-none"></div>
@@ -400,16 +480,16 @@ const MatchCard = ({ job = null }) => {
                                 </div>
                             )}
 
-                            {/* Always show the JD, but make it read-only if it's a snapshot */}
+                            {/* JD TEXTAREA */}
                             <textarea
                                 value={jobText}
                                 onChange={(e) => setJobText(e.target.value)}
                                 readOnly={!!job}
                                 placeholder="Raw job description text will appear here. If blocked by WAF, paste manually..."
-                                className={`w-full h-48 bg-violet-50/50 border border-violet-200 rounded-xl p-4 text-slate-700 text-sm focus:outline-none focus:border-violet-400 custom-scrollbar font-mono leading-relaxed ${job ? 'opacity-90 cursor-default shadow-inner' : 'shadow-sm'}`}
+                                className={`w-full h-48 bg-violet-50/50 border border-violet-200 rounded-xl p-4 text-slate-700 text-sm focus:outline-none focus:border-violet-400 custom-scrollbar font-mono leading-relaxed mt-4 ${job ? 'opacity-90 cursor-default shadow-inner' : 'shadow-sm'}`}
                             />
 
-                            {/* Evaluate Button (HIDDEN IF SNAPSHOT OR EVALUATION EXISTS) */}
+                            {/* Evaluate Button */}
                             {!job && !evaluation && (
                                 isEvaluating || (consoleStatus === 'error' && jobText) ? (
                                     <div className="py-2 mt-4 animate-in fade-in duration-500">
@@ -509,7 +589,8 @@ const MatchCard = ({ job = null }) => {
                                 </div>
                             )}
 
-                            <div className="mb-5">
+                            {/* --- THE STRATEGIC OVERRIDE BAR --- */}
+                            <div className="mb-5 mt-8">
                                 <div className="flex items-center gap-3 bg-white border border-violet-200 hover:border-violet-300 rounded-2xl p-3 px-5 focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-100 transition-all shadow-sm">
                                     <span className="text-violet-400 text-sm">🎯</span>
                                     <input
@@ -519,57 +600,74 @@ const MatchCard = ({ job = null }) => {
                                             setUserInstruction(e.target.value);
                                             if (coachFeedback) setCoachFeedback(null);
                                         }}
-                                        placeholder="Optional: Provide custom instructions for ACE (e.g., 'Focus heavily on my .NET architecture skills')..."
+                                        placeholder="Command ACE: 'Tailor resume for AWS' OR 'Why am I a fit for this role?'..."
                                         className="w-full bg-transparent text-slate-700 outline-none text-sm placeholder-slate-400 font-mono"
                                     />
                                 </div>
                             </div>
 
-                            {/* --- ACTION BUTTONS (VERTICAL LIST WITH GLOW ANIMATIONS) --- */}
-                            <div className="flex flex-col gap-4 w-full mb-10">
-
-                                {/* ---> NEW: MOCK INTERVIEW BUTTON <--- */}
-                                <div className="relative group/btn w-full">
-                                    <div className="absolute -inset-0.5 bg-gradient-to-r from-violet-400 to-indigo-400 rounded-2xl blur opacity-30 group-hover/btn:opacity-60 transition duration-500"></div>
-                                    <button
-                                        onClick={() => setShowSimulator(true)}
-                                        className="relative w-full py-4 bg-white text-violet-700 font-black uppercase tracking-widest rounded-2xl border border-violet-200 hover:border-violet-300 hover:bg-violet-50 transition-all duration-300 active:scale-[0.98] flex items-center justify-center shadow-md"
-                                    >
-                                        <span className="group-hover/btn:tracking-wider transition-all duration-300 flex items-center gap-3">
-                                            <span className="text-2xl drop-shadow-sm animate-pulse">🤖</span> Start Mock Interview
-                                        </span>
-                                    </button>
-                                </div>
-
-                                {/* Clear Data Button */}
-                                <button onClick={handleDelete} className="w-full py-4 bg-white text-slate-500 font-bold uppercase tracking-widest rounded-2xl border border-slate-200 hover:border-slate-300 hover:text-slate-700 transition-all duration-300 active:scale-[0.98] flex items-center justify-center shadow-sm">
-                                    Clear Screen
+                            {/* --- ACTION BUTTONS GRID --- */}
+                            <div className="grid grid-cols-2 gap-4 w-full mb-10">
+                                <button onClick={() => setShowSimulator(true)} className="col-span-2 relative w-full py-4 bg-violet-600 text-white font-black uppercase tracking-widest rounded-2xl border border-violet-500 hover:bg-violet-700 transition-all duration-300 active:scale-[0.98] flex items-center justify-center shadow-md gap-3">
+                                    <span className="text-2xl drop-shadow-sm animate-pulse">🤖</span> Start Mock Interview
                                 </button>
 
-                                {/* Save to History Button */}
-                                <button onClick={handleSaveToHistory} className="w-full py-4 bg-white text-blue-600 font-bold uppercase tracking-widest rounded-2xl border border-blue-200 hover:border-blue-300 hover:bg-blue-50 transition-all duration-300 active:scale-[0.98] flex items-center justify-center shadow-sm gap-2">
-                                    <span className="text-lg">💾</span> Save Snapshot
+                                <button onClick={handleTailorResume} disabled={isTailoring} className="py-4 bg-white text-fuchsia-600 font-bold uppercase tracking-widest rounded-2xl border border-fuchsia-200 hover:bg-fuchsia-50 transition-all duration-300 active:scale-[0.98] flex items-center justify-center shadow-sm gap-2">
+                                    {isTailoring ? "..." : "✨ Tailor Resume"}
                                 </button>
 
-                                {/* Auto-Tailor Button */}
-                                {isTailoring ? (
-                                    <div className="w-full"><GenAILoader message="Optimizing Keywords..." /></div>
-                                ) : (
-                                    <button onClick={handleTailorResume} className="w-full py-4 bg-white text-fuchsia-600 font-bold uppercase tracking-widest rounded-2xl border border-fuchsia-200 hover:border-fuchsia-300 hover:bg-fuchsia-50 transition-all duration-300 active:scale-[0.98] flex items-center justify-center shadow-sm gap-2">
-                                        <span className="text-lg">✨</span> Auto-Tailor Resume
-                                    </button>
-                                )}
+                                <button onClick={handleGenerateLetter} disabled={isGeneratingLetter} className="py-4 bg-white text-teal-600 font-bold uppercase tracking-widest rounded-2xl border border-teal-200 hover:bg-teal-50 transition-all duration-300 active:scale-[0.98] flex items-center justify-center shadow-sm gap-2">
+                                    {isGeneratingLetter ? "..." : "📝 Write Letter"}
+                                </button>
 
-                                {/* Generate Letter Button */}
-                                {isGeneratingLetter ? (
-                                    <div className="w-full"><GenAILoader message="Drafting Cover Letter..." /></div>
-                                ) : (
-                                    <button onClick={handleGenerateLetter} className="w-full py-4 bg-white text-teal-600 font-bold uppercase tracking-widest rounded-2xl border border-teal-200 hover:border-teal-300 hover:bg-teal-50 transition-all duration-300 active:scale-[0.98] flex items-center justify-center shadow-sm gap-2">
-                                        <span className="text-lg">📝</span> Generate Letter
-                                    </button>
-                                )}
+                                <button onClick={handleAskACE} disabled={isAsking || !userInstruction} className="col-span-2 py-4 bg-indigo-50 text-indigo-700 font-bold uppercase tracking-widest rounded-2xl border border-indigo-200 hover:bg-indigo-100 transition-all duration-300 active:scale-[0.98] flex items-center justify-center shadow-sm gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    {isAsking ? "Processing..." : "🧠 Ask ACE / Generate Q&A"}
+                                </button>
+
+                                <button onClick={handleExportPDF} className="py-4 bg-slate-800 text-white font-bold uppercase tracking-widest rounded-2xl hover:bg-slate-900 transition-all duration-300 active:scale-[0.98] flex items-center justify-center shadow-sm gap-2">
+                                    📄 Export PDF Kit
+                                </button>
+
+                                <button onClick={handleSaveToHistory} className="py-4 bg-blue-50 text-blue-700 font-bold uppercase tracking-widest rounded-2xl border border-blue-200 hover:bg-blue-100 transition-all duration-300 active:scale-[0.98] flex items-center justify-center shadow-sm gap-2">
+                                    💾 Save Snapshot
+                                </button>
+
+                                {/* ---> RESTORED: CLEAR SCREEN BUTTON <--- */}
+                                <button onClick={handleDelete} className="col-span-2 py-4 bg-rose-50 text-rose-600 font-bold uppercase tracking-widest rounded-2xl border border-rose-200 hover:bg-rose-100 transition-all duration-300 active:scale-[0.98] flex items-center justify-center shadow-sm gap-2">
+                                    🧹 Clear Matrix Data
+                                </button>
                             </div>
 
+                            {/* ---> TOKEN EXHAUSTION FALLBACK <--- */}
+                            {manualPromptFallback && (
+                                <div className="mb-8 p-6 rounded-2xl bg-amber-50 border border-amber-200 shadow-sm animate-in slide-in-from-top-4 fade-in duration-500">
+                                    <h4 className="text-amber-800 font-bold text-xs uppercase tracking-widest mb-3 flex items-center gap-2">
+                                        ⚠️ Google API Quota Reached: Manual Override
+                                    </h4>
+                                    <p className="text-amber-700 text-sm mb-4">Paste this prompt directly into Google Gemini to continue your session:</p>
+                                    <textarea readOnly value={manualPromptFallback} className="w-full h-32 bg-white border border-amber-200 rounded-xl p-3 text-sm text-slate-600 font-mono mb-3" />
+                                    <button onClick={() => { navigator.clipboard.writeText(manualPromptFallback); showToast("Fallback Prompt Copied"); }} className="bg-amber-600 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest">
+                                        Copy Prompt
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* ---> CUSTOM ANSWERS DISPLAY <--- */}
+                            {customAnswers.length > 0 && (
+                                <div className="space-y-6 mb-8">
+                                    <h4 className="text-lg font-black text-slate-800 flex items-center gap-3 tracking-wide uppercase border-b border-slate-100 pb-2">
+                                        <span className="bg-indigo-100 p-2 rounded-2xl text-indigo-600">🧠</span> Strategic Intelligence
+                                    </h4>
+                                    {customAnswers.map((qa, idx) => (
+                                        <div key={idx} className="bg-white border border-indigo-100 p-6 rounded-2xl shadow-sm relative group">
+                                            <p className="text-indigo-800 font-bold text-sm mb-3">Q: {qa.question}</p>
+                                            <p className="text-slate-600 text-sm font-serif leading-relaxed whitespace-pre-wrap">{qa.answer}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* TAILORED SUGGESTIONS */}
                             {tailoredSuggestions && Array.isArray(tailoredSuggestions) && (
                                 <div className="relative z-10 mt-10 animate-in fade-in slide-in-from-top-4 duration-700">
                                     <div className="flex justify-between items-center mb-6">
@@ -594,7 +692,6 @@ const MatchCard = ({ job = null }) => {
                                                     </span>
                                                     {suggestion.variations && suggestion.variations.map((variation, vIndex) => {
                                                         const isBest = vIndex === suggestion.best_variation_index;
-
                                                         return (
                                                             <div key={vIndex} className={`p-4 rounded-2xl border relative transition-all duration-300 group/copy ${isBest ? 'bg-emerald-50 border-emerald-200 shadow-[inset_0_0_15px_rgba(16,185,129,0.05)]' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
                                                                 {isBest && (
@@ -636,6 +733,7 @@ const MatchCard = ({ job = null }) => {
                                 </div>
                             )}
 
+                            {/* COVER LETTER */}
                             {coverLetter && (
                                 <div className="relative z-10 mt-8 pt-6 border-t border-violet-100 animate-in fade-in slide-in-from-top-4 duration-700">
                                     <div className="flex justify-between items-center mb-4">
@@ -643,9 +741,6 @@ const MatchCard = ({ job = null }) => {
                                             <span className="bg-teal-100 p-1.5 rounded-lg text-teal-600">📝</span> Tailored Cover Letter
                                         </h4>
                                         <div className="flex gap-3">
-                                            <button onClick={handleDownloadPDF} className="text-xs font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors flex items-center gap-2">
-                                                <span>📄</span> Export PDF
-                                            </button>
                                             <button onClick={() => { navigator.clipboard.writeText(coverLetter); showToast("Cover Letter Copied to Clipboard"); }} className="text-xs font-bold text-teal-600 hover:text-teal-700 uppercase tracking-widest bg-teal-50 px-3 py-1.5 rounded-lg border border-teal-200 hover:bg-teal-100 transition-colors">
                                                 Copy Text
                                             </button>
@@ -659,7 +754,7 @@ const MatchCard = ({ job = null }) => {
                 </div>
             </div>
 
-            {/* ---> ACE TOAST NOTIFICATION HUD <--- */}
+            {/* TOAST HUD */}
             {toastMessage && (
                 <div className="fixed bottom-8 right-8 z-[100] animate-in slide-in-from-bottom-8 fade-in duration-300">
                     <div className="bg-white/90 backdrop-blur-xl border border-emerald-200 shadow-lg text-emerald-700 px-6 py-4 rounded-2xl font-mono text-xs font-bold uppercase tracking-widest flex items-center gap-4">
@@ -672,12 +767,9 @@ const MatchCard = ({ job = null }) => {
                 </div>
             )}
 
-            {/* ---> INTERVIEW SIMULATOR MODAL <--- */}
+            {/* SIMULATOR */}
             {showSimulator && (
-                <InterviewSimulator
-                    job={job || evaluation} // Pass the snapshot if it exists, otherwise pass the live evaluation
-                    onClose={() => setShowSimulator(false)}
-                />
+                <InterviewSimulator job={job || evaluation} onClose={() => setShowSimulator(false)} />
             )}
         </div>
     );

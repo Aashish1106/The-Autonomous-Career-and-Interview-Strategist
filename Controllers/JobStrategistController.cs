@@ -782,6 +782,7 @@ namespace AutoJobStrategist.Api.Controllers
                 if (!string.IsNullOrWhiteSpace(request.CoverLetter)) record.CoverLetterText = request.CoverLetter;
                 if (request.TailoredSuggestions.HasValue && request.TailoredSuggestions.Value.ValueKind != JsonValueKind.Null) record.TailoredResumeJson = request.TailoredSuggestions.Value.ToString();
                 if (request.InterviewHistory.HasValue && request.InterviewHistory.Value.ValueKind != JsonValueKind.Null) record.InterviewHistoryJson = request.InterviewHistory.Value.ToString();
+                if (request.CustomAnswers != null) record.CustomAnswersJson = request.CustomAnswers.ToString();
 
                 await _context.SaveChangesAsync();
                 return Ok(new { message = "Successfully saved to Vault.", jobId = record.Id });
@@ -838,6 +839,47 @@ namespace AutoJobStrategist.Api.Controllers
             record.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
             return Ok(record);
+        }
+
+        [HttpPost("ask-question")]
+        public async Task<IActionResult> AskQuestion([FromBody] AskQuestionRequest request, [FromServices] Kernel kernel)
+        {
+            try
+            {
+                // 1. The System Prompt
+                var prompt = @"
+            You are ACE, an elite AI career strategist. 
+            Below is a target Job Description. The user has asked a specific strategic question or given an instruction regarding this role.
+            Answer it directly, professionally, and strategically. 
+            If they ask an interview question (e.g. 'Why am I a fit?'), write the exact script they should say out loud.
+            
+            [TARGET JOB DESCRIPTION]:
+            {{$jobDescription}}
+
+            [USER COMMAND / QUESTION]:
+            {{$question}}
+        ";
+
+                var arguments = new KernelArguments
+        {
+            { "jobDescription", request.JobDescription },
+            { "question", request.Question }
+        };
+
+                // 2. Generate the intelligence
+                var result = await kernel.InvokePromptAsync(prompt, arguments);
+
+                // 3. Return to React
+                return Ok(new { answer = result.GetValue<string>() });
+            }
+            catch (Microsoft.SemanticKernel.HttpOperationException ex) when (ex.Message.Contains("429"))
+            {
+                return StatusCode(429, "Token quota exhausted.");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"ACE Cognitive Failure: {ex.Message}");
+            }
         }
 
         // -------------------------------------------------------------------
@@ -1187,6 +1229,7 @@ namespace AutoJobStrategist.Api.Controllers
 
         // ---> NEW: KANBAN PIPELINE TRACKING <---
         public string PipelineStage { get; set; } = "Radar";
+        public string? CustomAnswersJson { get; set; }
         public DateTime? AppliedDate { get; set; }
         public string? BotErrorMessage { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -1203,6 +1246,7 @@ namespace AutoJobStrategist.Api.Controllers
         public JsonElement? TailoredSuggestions { get; set; }
         public JsonElement? InterviewHistory { get; set; }
         public string? PipelineStage { get; set; }
+        public object? CustomAnswers { get; set; }
     }
 
     public class UpdateProfileRequest
@@ -1291,5 +1335,11 @@ namespace AutoJobStrategist.Api.Controllers
     {
         public string NewStage { get; set; } = string.Empty;
         public string? ErrorMessage { get; set; }
+    }
+
+    public class AskQuestionRequest
+    {
+        public string JobDescription { get; set; } = string.Empty;
+        public string Question { get; set; } = string.Empty;
     }
 }
