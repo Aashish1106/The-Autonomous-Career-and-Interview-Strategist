@@ -16,9 +16,9 @@ export default function KanbanBoard() {
     const [deletingId, setDeletingId] = useState(null);
     const [simulatorJob, setSimulatorJob] = useState(null);
 
-    // ---> NEW: SORTING STATE <---
+    // ---> SORTING & FILTER STATE <---
     const [sortBy, setSortBy] = useState('newest');
-
+    const [searchTerm, setSearchTerm] = useState('');
     const [toastMessage, setToastMessage] = useState(null);
     const showToast = (message) => {
         setToastMessage(message);
@@ -172,7 +172,89 @@ export default function KanbanBoard() {
         return 'text-rose-700 bg-rose-100 border-rose-300';
     };
 
-    // ---> DYNAMIC SORTING ENGINE <---
+    // ---> JIRA-STYLE OMNI-SEARCH ENGINE <---
+    const applyFiltersAndSort = (jobsList) => {
+        let processed = [...jobsList];
+
+        if (searchTerm.trim() !== '') {
+            const terms = searchTerm.toLowerCase().split(/\s+/);
+
+            terms.forEach(term => {
+                const scoreMatch = term.match(/^(score|match):>(\d+)$/);
+                if (scoreMatch) {
+                    const threshold = parseInt(scoreMatch[2], 10);
+                    processed = processed.filter(j => (j.matchScore || j.MatchScore || 0) >= threshold);
+                    return;
+                }
+
+                const timeMatch = term.match(/^(days|time):<(\d+)$/);
+                if (timeMatch) {
+                    const days = parseInt(timeMatch[2], 10);
+                    const cutoff = Date.now() - (days * 24 * 60 * 60 * 1000);
+                    processed = processed.filter(j => {
+                        const timeAdded = new Date(j.createdAt || j.CreatedAt || j.savedAt || j.timestamp || 0).getTime();
+                        return timeAdded === 0 ? true : timeAdded >= cutoff;
+                    });
+                    return;
+                }
+
+                processed = processed.filter(j => {
+                    const evalData = j.evaluationJson || j.EvaluationJson || "";
+                    const evalString = typeof evalData === 'string' ? evalData : JSON.stringify(evalData);
+
+                    const deepText = `
+                        ${j.companyName || j.CompanyName || ''} 
+                        ${j.roleTitle || j.RoleTitle || ''} 
+                        ${j.jobDescription || j.JobDescription || ''} 
+                        ${evalString}
+                    `.toLowerCase();
+
+                    return deepText.includes(term);
+                });
+            });
+        }
+        return getSortedJobs(processed);
+    };
+
+    // ---> TEMPORAL DECAY ENGINE (WITH GHOSTING) <---
+    // ---> TEMPORAL DECAY ENGINE (WITH GHOSTING) <---
+    const getTemporalDecay = (job, stage) => {
+        // We don't want decay effects in the Graveyard or Radar
+        if (stage === 'Graveyard' || stage === 'Radar') return null;
+
+        // Extract the most recent timestamp available from your Postgres database
+        const timeStamp = new Date(job.updatedAt || job.UpdatedAt || job.createdAt || job.CreatedAt || job.savedAt || job.timestamp || 0).getTime();
+
+        // If an old legacy job has no time data, assume it's fresh to prevent math errors
+        if (timeStamp === 0) return null;
+
+        // Calculate the exact number of days old
+        const daysOld = Math.floor((Date.now() - timeStamp) / (1000 * 60 * 60 * 24));
+
+        // Tier 3: Ghosted (Max Decay - 40% opacity, heavily desaturated, slight blur)
+        if (daysOld >= 21) return {
+            level: 'stale',
+            text: `Ghosted (${daysOld}d)`,
+            fadeClass: 'opacity-40 grayscale-[80%] blur-[0.5px]'
+        };
+
+        // Tier 2: Stale (Medium Decay - 65% opacity, slightly desaturated)
+        if (daysOld >= 14) return {
+            level: 'stale',
+            text: `Stale (${daysOld}d)`,
+            fadeClass: 'opacity-[0.65] grayscale-[40%]'
+        };
+
+        // Tier 1: Aging (Beginning to fade - 85% opacity)
+        if (daysOld >= 7) return {
+            level: 'warning',
+            text: `Aging (${daysOld}d)`,
+            fadeClass: 'opacity-85'
+        };
+
+        return null; // Fresh
+    };
+
     const getSortedJobs = (jobsList) => {
         return [...jobsList].sort((a, b) => {
             const scoreA = a.matchScore || a.MatchScore || 0;
@@ -180,23 +262,19 @@ export default function KanbanBoard() {
             const nameA = (a.companyName || a.CompanyName || "").toLowerCase();
             const nameB = (b.companyName || b.CompanyName || "").toLowerCase();
 
-            // 1. Try to find an actual Timestamp from the backend
             const timeA = new Date(a.createdAt || a.CreatedAt || a.savedAt || a.timestamp || 0).getTime();
             const timeB = new Date(b.createdAt || b.CreatedAt || b.savedAt || b.timestamp || 0).getTime();
 
-            // 2. Fallback: Use the original DB insertion order from the Master Array
-            const indexA = safeJobs.indexOf(a);
-            const indexB = safeJobs.indexOf(b);
+            const indexA = jobs.indexOf(a);
+            const indexB = jobs.indexOf(b);
 
             switch (sortBy) {
                 case 'score-high': return scoreB - scoreA;
                 case 'score-low': return scoreA - scoreB;
                 case 'company-a-z': return nameA.localeCompare(nameB);
-                case 'oldest':
-                    return (timeA > 0 && timeB > 0) ? (timeA - timeB) : (indexA - indexB);
+                case 'oldest': return (timeA > 0 && timeB > 0) ? (timeA - timeB) : (indexA - indexB);
                 case 'newest':
-                default:
-                    return (timeA > 0 && timeB > 0) ? (timeB - timeA) : (indexB - indexA);
+                default: return (timeA > 0 && timeB > 0) ? (timeB - timeA) : (indexB - indexA);
             }
         });
     };
@@ -225,12 +303,33 @@ export default function KanbanBoard() {
                 `}
             </style>
 
-            {/* ---> NEW: THE SORTING CONTROL BAR <--- */}
-            <div className="flex justify-end mb-4 px-2 relative z-20">
-                <div className="flex items-center gap-3 bg-white/60 backdrop-blur-md border border-white/80 px-4 py-2 rounded-2xl shadow-sm">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-violet-500">
-                        <span className="mr-1.5 text-xs"></span>
-                         
+            {/* ---> THE DYNAMIC COMMAND DECK <--- */}
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 px-2 gap-4 relative z-20">
+                <div className="w-full lg:flex-1 lg:max-w-3xl">
+                    <div className="flex items-center gap-3 bg-white/80 backdrop-blur-xl border border-white/80 px-5 py-3.5 rounded-2xl shadow-sm focus-within:ring-2 focus-within:ring-violet-400 focus-within:border-violet-100 transition-all group">
+                        <span className="text-slate-400 group-focus-within:text-violet-500 transition-colors text-lg">⌘</span>
+                        <input
+                            type="text"
+                            placeholder='Type anything... Try: "remote", "typescript", "match:>85", "days:<30"'
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="bg-transparent border-none outline-none text-sm font-bold text-slate-700 w-full placeholder-slate-400 font-mono"
+                        />
+                        {searchTerm && (
+                            <button onClick={() => setSearchTerm('')} className="text-slate-500 hover:text-rose-500 transition-colors bg-slate-100 hover:bg-rose-50 rounded-lg p-1.5 px-3 text-[10px] font-black uppercase tracking-widest">
+                                Clear
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex flex-wrap gap-4 mt-2 px-2 text-[9px] font-mono text-slate-500 uppercase tracking-widest">
+                        <span><strong className="text-violet-600">Deep Search:</strong> Tech Stack, Locations, AI Json</span>
+                        <span><strong className="text-emerald-600">Operators:</strong> match:&gt;90, days:&lt;7</span>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3 bg-white/60 backdrop-blur-md border border-white/80 px-5 py-3.5 rounded-2xl shadow-sm shrink-0">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-violet-500 flex items-center gap-2">
+                        <span className="text-sm">📶</span> Sort
                     </span>
                     <select
                         value={sortBy}
@@ -250,27 +349,24 @@ export default function KanbanBoard() {
             <div className="flex h-full overflow-x-auto pb-8 custom-scrollbar gap-6 items-start">
                 <DragDropContext onDragEnd={onDragEnd}>
                     {DISPLAY_STAGES.map((stage) => {
-
-                        // 1. Filter the jobs for this column
                         const columnJobsRaw = safeJobs.filter(j => (j.pipelineStage || "Radar") === stage);
-
-                        // 2. Pass them through the Sorting Engine
-                        const columnJobs = getSortedJobs(columnJobsRaw);
+                        const columnJobs = applyFiltersAndSort(columnJobsRaw);
 
                         return (
                             <div key={stage} className="min-w-[320px] w-[320px] flex flex-col bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-sm h-[calc(100vh-18rem)]">
-
                                 <div className="p-4 border-b border-violet-100/50 flex justify-between items-center bg-white/60 rounded-t-2xl shadow-sm shrink-0 relative z-30">
                                     <h3 className="text-violet-900 font-black uppercase text-[10px] tracking-widest">{stage}</h3>
                                     <span className="bg-violet-100 text-violet-700 text-[10px] px-2 py-0.5 rounded-full font-mono">{columnJobs.length}</span>
                                 </div>
 
-                                <Droppable droppableId={stage}>
-                                    {(provided, snapshot) => (
-
-                                        <WaterfallScroll className={`transition-colors duration-300 ${snapshot.isDraggingOver ? 'bg-violet-50/50' : ''}`}>
-
-                                            <div ref={provided.innerRef} {...provided.droppableProps} className="p-4 min-h-full flex flex-col">
+                                <WaterfallScroll className="flex-1 transition-colors duration-300">
+                                    <Droppable droppableId={stage}>
+                                        {(provided, snapshot) => (
+                                            <div
+                                                ref={provided.innerRef}
+                                                {...provided.droppableProps}
+                                                className={`p-4 min-h-full flex flex-col ${snapshot.isDraggingOver ? 'bg-violet-50/50' : ''}`}
+                                            >
                                                 {columnJobs.map((job, index) => {
                                                     const safeId = String(job.id || job.Id || `fallback-${index}`);
                                                     const isDeleting = deletingId === safeId;
@@ -278,7 +374,6 @@ export default function KanbanBoard() {
                                                     return (
                                                         <Draggable key={safeId} draggableId={safeId} index={index}>
                                                             {(provided, snapshot) => {
-
                                                                 const getDraggableStyle = (style, snapshot) => {
                                                                     if (!style) return {};
                                                                     if (snapshot.isDropAnimating) return { ...style, transitionDuration: '0.2s', transitionTimingFunction: 'cubic-bezier(0.2, 1, 0.1, 1)' };
@@ -286,12 +381,28 @@ export default function KanbanBoard() {
                                                                     return style;
                                                                 };
 
+                                                                // ---> CALCULATE DECAY FOR THIS SPECIFIC CARD <---
+                                                                const decay = getTemporalDecay(job, stage);
+
+                                                                // Base styling depending on drag/delete/decay states
+                                                                const baseCardStyle = isDeleting ? 'bg-transparent border-transparent shadow-none p-0'
+                                                                    : snapshot.isDragging ? 'border-violet-400 bg-white shadow-2xl cursor-grabbing ring-2 ring-violet-500/20 opacity-100 grayscale-0 blur-none'
+                                                                        : decay?.level === 'stale' ? 'bg-rose-50/40 backdrop-blur-sm border-rose-300 shadow-[inset_0_0_15px_rgba(244,63,94,0.05)]'
+                                                                            : decay?.level === 'warning' ? 'bg-amber-50/40 backdrop-blur-sm border-amber-300 shadow-[inset_0_0_15px_rgba(245,158,11,0.05)]'
+                                                                                : 'bg-white/90 backdrop-blur-sm border-violet-100';
+
+                                                                // Extract the visual fade effect for Ghosting
+                                                                const visualDecayClass = decay?.fadeClass || 'opacity-100 grayscale-0 blur-none';
+
                                                                 return (
-                                                                    <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
+                                                                    <div
+                                                                        ref={provided.innerRef}
+                                                                        {...provided.draggableProps}
+                                                                        {...provided.dragHandleProps}
                                                                         style={getDraggableStyle(provided.draggableProps.style, snapshot)}
-                                                                        className={`relative mb-4 rounded-xl select-none transition-[border-color,box-shadow,background-color] duration-200 ease-out p-4 ${activeMenuId === safeId ? 'z-50' : 'z-10'}
-                                                                            ${isDeleting ? 'bg-transparent border-transparent shadow-none p-0' :
-                                                                                snapshot.isDragging ? 'border-violet-400 bg-white shadow-2xl cursor-grabbing ring-2 ring-violet-500/20' : 'bg-white/90 backdrop-blur-sm border border-violet-100 hover:border-violet-300 hover:shadow-md cursor-grab'}`}
+                                                                        className={`relative mb-4 rounded-xl select-none transition-all duration-300 ease-out p-4 ${activeMenuId === safeId ? 'z-50' : 'z-10'} 
+                                                                            ${baseCardStyle} 
+                                                                            ${visualDecayClass} hover:opacity-100 hover:grayscale-0 hover:blur-none hover:border-violet-400 hover:shadow-md cursor-grab`}
                                                                     >
                                                                         {isDeleting ? (
                                                                             <div className="absolute inset-0 z-50 pointer-events-none w-full h-24">
@@ -299,13 +410,46 @@ export default function KanbanBoard() {
                                                                             </div>
                                                                         ) : (
                                                                             <>
-                                                                                <div className="flex justify-between items-start mb-2">
-                                                                                    <div className={`px-2 py-1 rounded border text-[10px] font-black font-mono ${getScoreColor(job.matchScore || job.MatchScore)}`}>{job.matchScore || job.MatchScore}% MATCH</div>
+                                                                                <div className="flex justify-between items-start mb-3">
+
+                                                                                    {/* MATCH SCORE & DECAY BADGE CONTAINER */}
+                                                                                    <div className="flex items-center gap-2 flex-wrap mb-1">
+
+                                                                                        <div className={`px-2 py-0.5 rounded-md border shadow-sm text-[10px] font-black font-mono tracking-wide ${getScoreColor(job.matchScore || job.MatchScore)}`}>
+                                                                                            {job.matchScore || job.MatchScore}% MATCH
+                                                                                        </div>
+
+                                                                                        {/* ---> THE NEW EXPANDING DECAY PILL <--- */}
+                                                                                        {decay && (
+                                                                                            <div className={`group flex items-center gap-1.5 px-2 py-0.5 rounded-full border shadow-sm text-[10px] font-bold font-mono tracking-wide cursor-help transition-all duration-300 ease-out overflow-hidden ${decay.level === 'stale'
+                                                                                                    ? 'bg-white border-rose-200 shadow-[0_0_10px_rgba(244,63,94,0.15)]'
+                                                                                                    : 'bg-white border-amber-200 shadow-[0_0_10px_rgba(245,158,11,0.15)]'
+                                                                                                }`}>
+                                                                                                {/* The Status Indicator Dot */}
+                                                                                                <span className={`text-[9px] shrink-0 ${decay.level === 'stale' ? 'text-rose-500 animate-pulse' : 'text-amber-400'}`}>
+                                                                                                    ●
+                                                                                                </span>
+                                                                                                {/* The Text (Hidden by default, expands on hover/tap) */}
+                                                                                                <span className={`max-w-0 opacity-0 group-hover:max-w-[80px] group-hover:opacity-100 transition-all duration-300 ease-out whitespace-nowrap ${decay.level === 'stale' ? 'text-rose-600' : 'text-amber-600'}`}>
+                                                                                                    {decay.text.toUpperCase()}
+                                                                                                </span>
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+
                                                                                     <div className="relative">
                                                                                         <button onClick={(e) => toggleMenu(e, safeId)} className="text-slate-400 hover:text-violet-600 transition-colors p-1 relative z-10">•••</button>
 
                                                                                         {activeMenuId === safeId && (
                                                                                             <div className="absolute top-8 right-0 w-48 bg-white border border-violet-100 rounded-lg shadow-xl py-1 z-[100] animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
+
+                                                                                                {/* MOBILE FALLBACK: Show exact decay here */}
+                                                                                                {decay && (
+                                                                                                    <div className={`px-4 py-2 border-b border-slate-50 text-[10px] font-black tracking-widest uppercase flex items-center gap-2 ${decay.level === 'stale' ? 'text-rose-600 bg-rose-50/50' : 'text-amber-600 bg-amber-50/50'}`}>
+                                                                                                        <span className={decay.level === 'stale' ? 'animate-pulse' : ''}>●</span> {decay.text}
+                                                                                                    </div>
+                                                                                                )}
+
                                                                                                 <button onClick={(e) => openJobDetails(e, job)} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-violet-50 hover:text-violet-700 flex items-center gap-3 transition-colors">
                                                                                                     <span className="text-violet-500 text-lg">🔍</span> View MatchCard
                                                                                                 </button>
@@ -336,16 +480,15 @@ export default function KanbanBoard() {
                                                 })}
                                                 {provided.placeholder}
                                             </div>
-                                        </WaterfallScroll>
-                                    )}
-                                </Droppable>
+                                        )}
+                                    </Droppable>
+                                </WaterfallScroll>
                             </div>
                         );
                     })}
                 </DragDropContext>
             </div>
 
-            {/* ---> MODALS & TOASTS <--- */}
             {selectedJob && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 lg:p-8 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-200">
                     <div className="w-full max-w-5xl h-full max-h-[90vh] flex flex-col relative animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>

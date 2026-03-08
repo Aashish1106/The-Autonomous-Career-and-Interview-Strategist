@@ -77,27 +77,25 @@ function App() {
     return (
         <div className="min-h-screen bg-gradient-to-br from-violet-200 via-purple-100 to-fuchsia-100 py-12 px-4 font-sans text-slate-800 selection:bg-violet-500/20">
 
-            {/* ---> DATABASE TELEMETRY HUD (RESPONSIVE) <--- */}
-            {/* ---> GLOBAL TELEMETRY & NOTIFICATION HUD <--- */}
-            <div className="absolute top-4 right-4 md:top-8 md:right-8 flex items-center gap-3 md:gap-4 z-[300]">
+            <div className="w-full flex justify-end mb-8 z-[300] relative">
+                <div className="flex items-center gap-3 md:gap-4">
 
-                {/* 1. The Notification Bell */}
-                <div className="relative">
-                    <button
-                        onClick={() => setIsNotifOpen(!isNotifOpen)}
-                        className={`relative p-2.5 md:p-3 rounded-full bg-white/80 border transition-all shadow-sm backdrop-blur-md flex items-center justify-center hover:scale-105 active:scale-95 ${isNotifOpen ? 'border-violet-400 shadow-[0_0_15px_rgba(139,92,246,0.3)]' : 'border-white hover:border-violet-200'}`}
-                    >
-                        <span className="text-sm md:text-base grayscale opacity-80">🔔</span>
-                        {unreadCount > 0 && (
-                            <span className="absolute top-0 right-0 -translate-y-1/4 translate-x-1/4 flex h-4 w-4 md:h-5 md:w-5 items-center justify-center rounded-full bg-rose-500 text-[9px] md:text-[10px] font-black text-white shadow-md ring-2 ring-white animate-in zoom-in">
-                                {unreadCount}
-                            </span>
-                        )}
-                    </button>
-
-                    {/* The Dropdown Panel */}
-                    {isNotifOpen && (
-                        <div className="absolute top-full right-0 mt-3 w-80 md:w-96 bg-white/95 backdrop-blur-2xl border border-violet-100 shadow-[0_20px_50px_-10px_rgba(139,92,246,0.2)] rounded-3xl overflow-hidden animate-in slide-in-from-top-4 fade-in duration-200 origin-top-right">
+                    {/* 1. The Notification Bell */}
+                    <div className="relative">
+                        <button
+                            onClick={() => setIsNotifOpen(!isNotifOpen)}
+                            className={`relative p-2.5 md:p-3 rounded-full bg-white/80 border transition-all shadow-sm backdrop-blur-md flex items-center justify-center hover:scale-105 active:scale-95 ${isNotifOpen ? 'border-violet-400 shadow-[0_0_15px_rgba(139,92,246,0.3)]' : 'border-white hover:border-violet-200'}`}
+                        >
+                            <span className="text-sm md:text-base grayscale opacity-80">🔔</span>
+                            {unreadCount > 0 && (
+                                <span className="absolute top-0 right-0 -translate-y-1/4 translate-x-1/4 flex h-4 w-4 md:h-5 md:w-5 items-center justify-center rounded-full bg-rose-500 text-[9px] md:text-[10px] font-black text-white shadow-md ring-2 ring-white animate-in zoom-in">
+                                    {unreadCount}
+                                </span>
+                            )}
+                        </button>
+                    
+                        {isNotifOpen && (
+                            <div className="absolute top-full right-0 mt-3 w-80 md:w-96 bg-white/95 backdrop-blur-2xl border border-violet-100 shadow-[0_20px_50px_-10px_rgba(139,92,246,0.2)] rounded-3xl overflow-hidden animate-in slide-in-from-top-4 fade-in duration-200 origin-top-right">
                             <div className="p-4 md:p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                                 <h3 className="text-xs md:text-sm font-black uppercase tracking-widest text-slate-800 flex items-center gap-2">
                                     <span>📡</span> Command Feed
@@ -134,7 +132,9 @@ function App() {
                             </div>
                         </div>
                     )}
-                </div>
+                    </div>
+                
+                
 
                 {/* 2. Postgres DB Status (Original) */}
                 <div className="flex items-center gap-2 md:gap-3 bg-white/80 border border-white rounded-full px-3 py-2 md:px-4 md:py-2.5 shadow-sm backdrop-blur-md">
@@ -149,7 +149,8 @@ function App() {
                         </span>
                     </span>
                 </div>
-
+                
+                </div>
             </div>
 
             <div className="max-w-3xl mx-auto text-center mt-8 md:mt-0 mb-8 md:mb-12 animate-in slide-in-from-top-4 fade-in duration-700">
