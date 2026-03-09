@@ -13,6 +13,7 @@ namespace AutoJobStrategist.Api.Data
         public DbSet<JobApplication> JobApplications { get; set; }
         public DbSet<EvaluationHistory> EvaluationHistories { get; set; }
         public DbSet<ResumeVectorChunk> ResumeVectorChunks { get; set; }
+        public DbSet<SystemNotification> SystemNotifications { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

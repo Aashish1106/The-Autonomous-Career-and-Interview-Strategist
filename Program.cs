@@ -1,5 +1,4 @@
 using AutoJobStrategist.Api.Data;
-using AutoJobStrategist.Api.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.SemanticKernel;
 
@@ -26,12 +25,19 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// ---> 1. ADD SIGNALR & BACKGROUND AGENT <---
+builder.Services.AddSignalR();
+builder.Services.AddHostedService<AutoJobStrategist.Api.Services.ProactiveAgentService>();
+
+// ---> 2. SIGNALR-COMPLIANT CORS POLICY <---
+// SignalR WebSockets STRICTLY FORBID AllowAnyOrigin(). You must specify the exact URLs and AllowCredentials.
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll",
-        policy => policy.AllowAnyOrigin()
+        policy => policy.WithOrigins("https://ace-jarvisai.vercel.app", "http://localhost:5173", "http://localhost:3000")
+                        .AllowAnyMethod()
                         .AllowAnyHeader()
-                        .AllowAnyMethod());
+                        .AllowCredentials());
 });
 
 // ----------------------------------------------------------------
@@ -62,6 +68,21 @@ builder.Services.AddKernel()
 
 var app = builder.Build();
 
+// ---> 3. AZURE DB AUTO-SYNC <---
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    try
+    {
+        db.Database.Migrate();
+        Console.WriteLine("✅ Azure Database schema synchronized successfully.");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"🚨 Migration Failed: {ex.Message}");
+    }
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -69,6 +90,15 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// CORS must be here, before MapControllers and MapHub
 app.UseCors("AllowAll");
 app.MapControllers();
+
+// ---> 4. MAP THE SIGNALR HUB <---
+app.MapHub<AutoJobStrategist.Api.Hubs.NotificationHub>("/hubs/notifications");
+
+// ---> 5. CLOUD VERSION TRACKER <---
+app.MapGet("/api/ping", () => "JARVIS V2 - SIGNALR IS ACTIVE");
+
 app.Run();

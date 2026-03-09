@@ -1,9 +1,11 @@
 ﻿import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import * as signalR from '@microsoft/signalr';
 import MatchCard from './components/MatchCard'
 import EvaluationHistory from './components/EvaluationHistory';
 import AdminSettings from './components/AdminSettings';
 import KanbanBoard from './components/KanbanBoard';
+
 
 function App() {
     const [activeTab, setActiveTab] = useState('history'); // 'history', 'search', or 'settings'
@@ -12,18 +14,71 @@ function App() {
     // ---> ADDED: Recalibration State <---
     const [isRecalibrating, setIsRecalibrating] = useState(false);
 
-    // ---> NEW: NOTIFICATION STATE <---
+    // ---> THE NOTIFICATION ENGINE STATE <---
+    const [notifications, setNotifications] = useState([]);
     const [isNotifOpen, setIsNotifOpen] = useState(false);
-    const [notifications, setNotifications] = useState([
-        { id: 1, type: 'interview', title: 'Interview Tomorrow', message: 'Societe Generale - Technical Round at 10:00 AM.', time: '10 mins ago', read: false },
-        { id: 2, type: 'system', title: 'ACE Agent Report', message: 'Scraped and queued 4 high-match jobs while you were away.', time: '2 hours ago', read: false },
-        { id: 3, type: 'action', title: 'Stale Application', message: 'Pluralsight application deployed 14 days ago. Time to follow up.', time: '1 day ago', read: true }
-    ]);
 
+    // Automatically calculate the red badge number
     const unreadCount = notifications.filter(n => !n.read).length;
 
-    const markAllAsRead = () => {
-        setNotifications(notifications.map(n => ({ ...n, read: true })));
+    // ---> 1. THE FETCH PROTOCOL <---
+    const fetchNotifications = async () => {
+        try {
+            const res = await fetch("https://jarvis-ace-api-hbepfjgzhmguhchv.southindia-01.azurewebsites.net/api/JobStrategist/notifications");
+            if (res.ok) {
+                const data = await res.json();
+                setNotifications(data);
+            }
+        } catch (error) {
+            console.error("Telemetry radar failed to fetch notifications:", error);
+        }
+    };
+
+    // ---> 2. THE LIVE SIGNALR CONNECTION (Replaces Polling) <---
+    useEffect(() => {
+        // Fetch the initial history once on load
+        fetchNotifications();
+
+        // Establish the persistent WebSockets connection
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("https://jarvis-ace-api-hbepfjgzhmguhchv.southindia-01.azurewebsites.net/hubs/notifications")
+            .withAutomaticReconnect() // Automatically reconnects if your laptop sleeps or network drops
+            .build();
+
+        connection.start()
+            .then(() => console.log("📡 SignalR Connected: JARVIS telemetry is live."))
+            .catch(err => console.error("SignalR Connection Error: ", err));
+
+        // Listen for the live broadcast from C#
+        connection.on("ReceiveNotification", (newNotification) => {
+            console.log("🔔 Live Push Received:", newNotification);
+
+            // Instantly inject the new notification at the top of the list
+            setNotifications(prev => [newNotification, ...prev]);
+
+            // Optional: Show a toast so you know it happened without opening the menu
+            showToast(`🔔 ${newNotification.title}`);
+        });
+
+        // Cleanup on unmount
+        return () => {
+            connection.stop();
+        };
+    }, []);
+
+    // ---> 3. THE ACTION PROTOCOL <---
+    const markAllAsRead = async () => {
+        // Optimistic UI update: Instantly turn them gray so it feels lightning fast
+        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+
+        try {
+            // Tell the backend to officially mark them as read
+            await fetch("https://jarvis-ace-api-hbepfjgzhmguhchv.southindia-01.azurewebsites.net/api/JobStrategist/notifications/mark-read", {
+                method: "PUT"
+            });
+        } catch (error) {
+            console.error("Failed to sync read status with the server:", error);
+        }
     };
 
     const showToast = (message) => {

@@ -13,6 +13,8 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using UglyToad.PdfPig;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.SignalR;
+using AutoJobStrategist.Api.Hubs;
 
 namespace AutoJobStrategist.Api.Controllers
 {
@@ -24,12 +26,14 @@ namespace AutoJobStrategist.Api.Controllers
         private readonly AppDbContext _context;
         private readonly IConfiguration _config;
         private static readonly HttpClient _httpClient = new HttpClient();
+        private readonly IHubContext<NotificationHub> _hubContext;
 
-        public JobStrategistController(Kernel kernel, AppDbContext context, IConfiguration config)
+        public JobStrategistController(Kernel kernel, AppDbContext context, IConfiguration config, IHubContext<NotificationHub> hubContext)
         {
             _kernel = kernel;
             _context = context;
             _config = config;
+            _hubContext = hubContext;
         }
 
         // ---> THE NATIVE REST OVERRIDE FOR VECTOR EMBEDDINGS <---
@@ -486,6 +490,213 @@ namespace AutoJobStrategist.Api.Controllers
             {
                 return "API Outage (Offline)";
             }
+        }
+
+        // -------------------------------------------------------------------
+        // THE "SMART NOTES" ENGINE (Intent Extraction & Notification Routing)
+        // -------------------------------------------------------------------
+        [HttpPut("evaluation/{id}/notes")]
+        public async Task<IActionResult> UpdateNotes(Guid id, [FromBody] UpdateNoteRequest request)
+        {
+            try
+            {
+                var evaluation = await _context.EvaluationHistories.FindAsync(id);
+                if (evaluation == null) return NotFound("Evaluation record not found.");
+
+                // 1. Save the raw text immediately
+                evaluation.Notes = request.Notes;
+                evaluation.UpdatedAt = DateTime.UtcNow;
+
+                // 2. The Smart Analysis
+                SmartNoteAnalysis? analysis = null;
+                if (!string.IsNullOrWhiteSpace(request.Notes))
+                {
+                    string currentDate = DateTime.UtcNow.ToString("yyyy-MM-dd");
+
+                    // UPGRADED PROMPT: Smarter intent recognition
+                    var promptTemplate = $@"
+                    You are an AI tracking assistant. Analyze this user note for a job application.
+                    Classify the intent strictly as one of: 'Interview', 'FollowUp', or 'General'.
+                    RULES: 
+                    - 'checking status', 'waiting on', or 'follow up' MUST be classified as 'FollowUp'.
+                    - Today's Date is {currentDate}. If a date is implied (e.g., 'Friday'), extract it as ISO 8601. If no date is implied, return null.
+                    
+                    Return ONLY valid JSON.
+                    {{
+                        ""intent"": ""FollowUp"",
+                        ""extracted_date"": null,
+                        ""suggested_action"": ""Ping recruiter on LinkedIn""
+                    }}
+
+                    USER NOTE: {{$noteText}}";
+
+                    var arguments = new KernelArguments() { { "noteText", request.Notes } };
+                    var result = await _kernel.InvokePromptAsync(promptTemplate, arguments);
+                    await TrackTokenUsageAsync(result, promptTemplate);
+
+                    var rawResponse = result.ToString();
+                    var startIndex = rawResponse.IndexOf('{');
+                    var endIndex = rawResponse.LastIndexOf('}');
+
+                    if (startIndex != -1 && endIndex != -1)
+                    {
+                        var cleanJson = rawResponse.Substring(startIndex, endIndex - startIndex + 1);
+                        analysis = JsonSerializer.Deserialize<SmartNoteAnalysis>(cleanJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                        // ---> THE NEW NOTIFICATION ROUTER <---
+                        if (analysis != null && (analysis.Intent == "Interview" || analysis.Intent == "FollowUp"))
+                        {
+                            var notification = new SystemNotification
+                            {
+                                UserId = Guid.Parse("11111111-1111-1111-1111-111111111111"), // Hardcoded admin ID for now
+                                RelatedJobId = evaluation.Id,
+                                Title = analysis.Intent == "Interview" ? "📅 Interview Scheduled" : "🔄 Follow-up Required",
+                                Message = $"Action needed for {evaluation.CompanyName ?? "this role"}: {analysis.SuggestedAction}",
+                                Type = analysis.Intent.ToLower(),
+                                IsRead = false,
+
+                                // If AI found a date, schedule it for that date. Otherwise, show immediately.
+                                TriggerDate = !string.IsNullOrWhiteSpace(analysis.ExtractedDate)
+                                              && DateTime.TryParse(analysis.ExtractedDate, out var parsedDate)
+                                    ? parsedDate
+                                    : null
+                            };
+
+                            _context.SystemNotifications.Add(notification);
+                            Console.WriteLine($"[DB ACTION] Generated {notification.Type} notification for {evaluation.CompanyName}");
+                        }
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+
+                // ---> SIGNALR PUSH <---
+                // If a notification was created, push it live to React
+                if (analysis != null && (analysis.Intent == "Interview" || analysis.Intent == "FollowUp"))
+                {
+                    // Fetch the notification we just saved to get its generated ID
+                    var latestNotif = await _context.SystemNotifications
+                        .OrderByDescending(n => n.CreatedAt)
+                        .FirstOrDefaultAsync(n => n.RelatedJobId == evaluation.Id);
+
+                    if (latestNotif != null)
+                    {
+                        await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
+                        {
+                            id = latestNotif.Id,
+                            title = latestNotif.Title,
+                            message = latestNotif.Message,
+                            type = latestNotif.Type,
+                            read = latestNotif.IsRead,
+                            time = "just now",
+                            relatedJobId = latestNotif.RelatedJobId
+                        });
+                    }
+                }
+
+                return Ok(new
+                {
+                    message = "Note saved and analyzed.",
+                    notes = evaluation.Notes,
+                    intelligence = analysis
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Failed to save note: {ex.Message}");
+            }
+        }
+
+        // -------------------------------------------------------------------
+        // NOTIFICATION ENGINE: FETCH & AUTO-CLEAN (The Piggyback Purge)
+        // -------------------------------------------------------------------
+        [HttpGet("notifications")]
+        public async Task<IActionResult> GetNotifications()
+        {
+            var userId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+
+            try
+            {
+                // 1. THE SILENT PURGE: Delete read notifications older than 7 days
+                var cutoffDate = DateTime.UtcNow.AddDays(-7);
+                var staleNotifications = await _context.SystemNotifications
+                    .Where(n => n.UserId == userId && n.IsRead == true && n.CreatedAt < cutoffDate)
+                    .ToListAsync();
+
+                if (staleNotifications.Any())
+                {
+                    _context.SystemNotifications.RemoveRange(staleNotifications);
+                    await _context.SaveChangesAsync();
+                    Console.WriteLine($"[AUTO-PURGE] Vaporized {staleNotifications.Count} stale notifications.");
+                }
+
+                // 2. FETCH ACTIVE NOTIFICATIONS
+                var activeNotifications = await _context.SystemNotifications
+                    .Where(n => n.UserId == userId)
+                    // Only get notifications meant for today or earlier (hides future reminders)
+                    .Where(n => n.TriggerDate == null || n.TriggerDate <= DateTime.UtcNow)
+                    .OrderByDescending(n => n.CreatedAt)
+                    .Take(30) // The UI Cap
+                    .Select(n => new
+                    {
+                        id = n.Id,
+                        title = n.Title,
+                        message = n.Message,
+                        type = n.Type,
+                        read = n.IsRead,
+                        time = GetRelativeTime(n.CreatedAt), // Helper function (we will add below)
+                        relatedJobId = n.RelatedJobId
+                    })
+                    .ToListAsync();
+
+                return Ok(activeNotifications);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Notification fetch failed: {ex.Message}");
+            }
+        }
+
+        // -------------------------------------------------------------------
+        // NOTIFICATION ENGINE: MARK ALL AS READ
+        // -------------------------------------------------------------------
+        [HttpPut("notifications/mark-read")]
+        public async Task<IActionResult> MarkNotificationsAsRead()
+        {
+            var userId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+
+            try
+            {
+                var unread = await _context.SystemNotifications
+                    .Where(n => n.UserId == userId && n.IsRead == false)
+                    .ToListAsync();
+
+                foreach (var note in unread)
+                {
+                    note.IsRead = true;
+                }
+
+                await _context.SaveChangesAsync();
+                return Ok(new { message = "All notifications marked as read." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Failed to update notifications: {ex.Message}");
+            }
+        }
+
+        // ---> TINY HELPER FUNCTION FOR RELATIVE TIME (e.g., "2 hours ago") <---
+        private static string GetRelativeTime(DateTime pastDate)
+        {
+            var ts = new TimeSpan(DateTime.UtcNow.Ticks - pastDate.Ticks);
+            double delta = Math.Abs(ts.TotalSeconds);
+
+            if (delta < 60) return ts.Seconds == 1 ? "one second ago" : ts.Seconds + " seconds ago";
+            if (delta < 3600) return ts.Minutes == 1 ? "a minute ago" : ts.Minutes + " minutes ago";
+            if (delta < 86400) return ts.Hours == 1 ? "an hour ago" : ts.Hours + " hours ago";
+            if (delta < 2592000) return ts.Days == 1 ? "yesterday" : ts.Days + " days ago";
+            if (delta < 31104000) return ts.Days / 30 == 1 ? "one month ago" : ts.Days / 30 + " months ago";
+            return ts.Days / 365 == 1 ? "one year ago" : ts.Days / 365 + " years ago";
         }
 
         // -------------------------------------------------------------------
@@ -1026,7 +1237,8 @@ namespace AutoJobStrategist.Api.Controllers
                         jobDescription = e.JobDescription,
                         evaluationJson = e.EvaluationJson, // Holds Gaps & Recommendations
                         tailoredResumeJson = e.TailoredResumeJson,
-                        coverLetterText = e.CoverLetterText
+                        coverLetterText = e.CoverLetterText,
+                        notes = e.Notes
                     })
                     .ToListAsync();
 
@@ -1114,6 +1326,9 @@ namespace AutoJobStrategist.Api.Controllers
     }
 
     // ---> ENFORCED DATA CONTRACTS (DTOs) <---
+
+    
+
 
     // Added missing classes for the Job Evaluation output
     public class ApplicationWorkflowState
@@ -1234,6 +1449,7 @@ namespace AutoJobStrategist.Api.Controllers
         public string? BotErrorMessage { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+        public string? Notes { get; set; }
     }
 
     public class SaveHistoryRequest
@@ -1341,5 +1557,48 @@ namespace AutoJobStrategist.Api.Controllers
     {
         public string JobDescription { get; set; } = string.Empty;
         public string Question { get; set; } = string.Empty;
+    }
+
+    public class UpdateNoteRequest
+    {
+        public string Notes { get; set; } = string.Empty;
+    }
+
+    public class SmartNoteAnalysis
+    {
+        [JsonPropertyName("intent")]
+        public string Intent { get; set; } = string.Empty;
+
+        [JsonPropertyName("extracted_date")]
+        public string? ExtractedDate { get; set; }
+
+        [JsonPropertyName("suggested_action")]
+        public string SuggestedAction { get; set; } = string.Empty;
+    }
+
+    public class SystemNotification
+    {
+        public Guid Id { get; set; } = Guid.NewGuid();
+
+        // Links to your master profile
+        public Guid UserId { get; set; }
+
+        // What the notification says
+        public string Title { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+
+        // UI Classification: 'interview', 'followup', 'system', 'warning'
+        public string Type { get; set; } = "system";
+
+        // Has the user seen it?
+        public bool IsRead { get; set; } = false;
+
+        // Allows the UI to jump straight to the correct Kanban card
+        public Guid? RelatedJobId { get; set; }
+
+        // THE AGENTIC LAYER: When should this become visible? (Null = Immediate)
+        public DateTime? TriggerDate { get; set; }
+
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }

@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
+    "@microsoft/signalr": "^10.0.0",
     "jspdf": "^4.2.0"
   }
 }

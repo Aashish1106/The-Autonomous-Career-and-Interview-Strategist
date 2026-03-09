@@ -12,14 +12,14 @@ export default function KanbanBoard() {
     const [isLoading, setIsLoading] = useState(true);
     const [activeMenuId, setActiveMenuId] = useState(null);
     const [selectedJob, setSelectedJob] = useState(null);
-
     const [deletingId, setDeletingId] = useState(null);
     const [simulatorJob, setSimulatorJob] = useState(null);
-
-    // ---> SORTING & FILTER STATE <---
+    const [editingNoteId, setEditingNoteId] = useState(null);
+    const [noteText, setNoteText] = useState('');
     const [sortBy, setSortBy] = useState('newest');
     const [searchTerm, setSearchTerm] = useState('');
     const [toastMessage, setToastMessage] = useState(null);
+
     const showToast = (message) => {
         setToastMessage(message);
         setTimeout(() => setToastMessage(null), 3000);
@@ -107,6 +107,41 @@ export default function KanbanBoard() {
             console.error(error);
             setDeletingId(null);
             showToast("🚨 Error deleting record");
+        }
+    };
+
+    const handleNoteSave = async (id) => {
+        // 1. Instantly update the local state for a snappy UI
+        setJobs(jobs.map(j => {
+            const currentId = String(j.id || j.Id);
+            return currentId === id ? { ...j, notes: noteText } : j;
+        }));
+
+        // 2. Close the input
+        setEditingNoteId(null);
+
+        // 3. Send update to backend and read the AI's response
+        try {
+            const response = await fetch(`https://jarvis-ace-api-hbepfjgzhmguhchv.southindia-01.azurewebsites.net/api/JobStrategist/evaluation/${id}/notes`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ notes: noteText })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+
+                // Print the AI's analysis to the browser console!
+                console.log("🧠 ACE Smart Note Analysis:", data.intelligence);
+
+                // Show a tiny success popup
+                showToast("✍️ Note Saved");
+            } else {
+                throw new Error("Failed to save");
+            }
+        } catch (error) {
+            console.error("Failed to sync note:", error);
+            showToast("🚨 Failed to save note");
         }
     };
 
@@ -469,7 +504,40 @@ export default function KanbanBoard() {
                                                                                     </div>
                                                                                 </div>
                                                                                 <h4 className="text-slate-800 font-bold text-sm leading-tight mb-1 pr-4 truncate">{job.roleTitle || job.RoleTitle}</h4>
-                                                                                <p className="text-violet-600 text-xs font-mono truncate">{job.companyName || job.CompanyName}</p>
+                                                                                    <p className="text-violet-600 text-xs font-mono truncate">{job.companyName || job.CompanyName}</p>
+                                                                                    {/* ---> INLINE NEXT-ACTION NOTE <--- */}
+                                                                                    <div
+                                                                                        className="mt-3 pt-3 border-t border-slate-100 border-dashed"
+                                                                                        onClick={(e) => e.stopPropagation()} // Prevents dragging when trying to click the input
+                                                                                        onMouseDown={(e) => e.stopPropagation()}
+                                                                                    >
+                                                                                        {editingNoteId === safeId ? (
+                                                                                            <input
+                                                                                                autoFocus
+                                                                                                type="text"
+                                                                                                value={noteText}
+                                                                                                onChange={(e) => setNoteText(e.target.value)}
+                                                                                                onBlur={() => handleNoteSave(safeId)}
+                                                                                                onKeyDown={(e) => e.key === 'Enter' && handleNoteSave(safeId)}
+                                                                                                className="w-full bg-violet-50 border border-violet-200 rounded text-[11px] font-medium p-1.5 text-slate-700 outline-none focus:ring-1 focus:ring-violet-400 transition-all shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]"
+                                                                                                placeholder="E.g., Follow up next Tuesday..."
+                                                                                            />
+                                                                                        ) : (
+                                                                                            <div
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation();
+                                                                                                    setEditingNoteId(safeId);
+                                                                                                    setNoteText(job.notes || job.Notes || "");
+                                                                                                }}
+                                                                                                className="text-[10px] font-medium text-slate-500 hover:text-violet-700 hover:bg-violet-50/50 p-1.5 rounded cursor-text transition-colors flex items-center gap-1.5 min-h-[28px] group/note"
+                                                                                            >
+                                                                                                <span className="opacity-40 group-hover/note:opacity-100 transition-opacity">✍️</span>
+                                                                                                <span className={job.notes || job.Notes ? "text-slate-700" : "italic opacity-60"}>
+                                                                                                    {job.notes || job.Notes || "Add next action..."}
+                                                                                                </span>
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
                                                                             </>
                                                                         )}
                                                                     </div>
